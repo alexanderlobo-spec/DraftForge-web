@@ -14,6 +14,9 @@
   <!-- App styles -->
   <link rel="stylesheet" href="css/app.css">
 
+  <!-- Restaura tema salvo antes do render para evitar flash -->
+  <script>(function(){var t=localStorage.getItem('df_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}());</script>
+
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" async defer></script>
 </head>
@@ -43,6 +46,9 @@
     <div class="header-right">
       <span class="save-indicator" id="save-indicator"></span>
       <span id="header-words"></span>
+      <button class="btn-subtle hidden" id="btn-save-now" title="Salvar (⌘S)">Salvar</button>
+      <button class="btn-subtle hidden" id="btn-close-project" title="Fechar projeto">Fechar</button>
+      <button class="btn-subtle" id="btn-theme" title="Alternar tema">🌙</button>
       <button class="btn-subtle" id="btn-logout">Sair</button>
       <div class="user-badge" id="user-initial">?</div>
     </div>

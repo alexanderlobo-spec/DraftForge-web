@@ -9,9 +9,22 @@ let saveStatus     = 'saved';
 
 const $ = id => document.getElementById(id);
 
+// Remove tags HTML do texto armazenado pelo app desktop
+function stripHtml(html) {
+  if (!html) return '';
+  return html
+    .replace(/<\/p>\s*<p[^>]*>/gi, '\n\n')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
 // ── Inicialização ──
 async function init() {
-  // Passa callback para quando o login via popup do Google terminar
   const account = await initAuth((user) => {
     showApp(user);
     loadAllProjects();
@@ -36,6 +49,12 @@ function showApp(account) {
   $('user-initial').textContent = name.charAt(0).toUpperCase();
 }
 
+function applyTheme(dark) {
+  document.documentElement.dataset.theme = dark ? 'dark' : '';
+  const btn = $('btn-theme');
+  if (btn) btn.textContent = dark ? '☀️' : '🌙';
+}
+
 // ── Projetos ──
 async function loadAllProjects() {
   $('project-list').innerHTML = '<div class="list-placeholder">Carregando…</div>';
@@ -44,7 +63,6 @@ async function loadAllProjects() {
   try {
     const items = await listProjects();
 
-    // Sem projetos ainda
     if (items === null || items.length === 0) {
       renderProjectList();
       return;
@@ -102,6 +120,24 @@ async function openProject(slug) {
   renderSceneList();
   showSidebarState('scenes');
   showEditorState('empty');
+  $('btn-save-now').classList.remove('hidden');
+  $('btn-close-project').classList.remove('hidden');
+}
+
+async function closeCurrentProject() {
+  if (currentScene) {
+    clearTimeout(saveTimer);
+    await doSave(true);
+  }
+  currentProject = null;
+  currentScene   = null;
+  $('header-project-name').textContent = '';
+  $('header-words').textContent = '';
+  setSaveStatus('saved');
+  $('btn-save-now').classList.add('hidden');
+  $('btn-close-project').classList.add('hidden');
+  showSidebarState('projects');
+  showEditorState('empty');
 }
 
 // ── Cenas ──
@@ -145,7 +181,6 @@ function renderSceneList() {
 }
 
 async function openScene(scene) {
-  // Salva cena anterior antes de trocar
   if (currentScene) {
     clearTimeout(saveTimer);
     await doSave(true);
@@ -153,23 +188,20 @@ async function openScene(scene) {
 
   currentScene = scene;
 
-  // Atualiza sidebar
   document.querySelectorAll('.scene-item').forEach(el =>
     el.classList.toggle('active', parseInt(el.dataset.id) === scene.id)
   );
 
-  // Header da cena
   const actNames = { 1: 'ATO 1', 2: 'ATO 2', 3: 'ATO 3' };
   $('scene-act-label').textContent = actNames[scene.act] || 'ATO 1';
   $('scene-act-label').className   = `scene-act-label act-${scene.act}-color`;
   $('scene-title').textContent     = scene.title;
   $('scene-subtitle').textContent  = scene.subtitle || '';
 
-  // Editor
-  $('editor-textarea').value = scene.text || '';
+  // stripHtml limpa HTML armazenado pelo app desktop
+  $('editor-textarea').value = stripHtml(scene.text || '');
   updateWordCount();
 
-  // Painel de notas
   $('notes-status').value   = scene.status   || 'todo';
   $('notes-nota').value     = scene.nota     || '';
   $('notes-loc').value      = scene.loc      || '';
@@ -188,7 +220,6 @@ function updateWordCount() {
   const words = countTextWords(text);
   $('scene-word-count').textContent = `${words.toLocaleString('pt-BR')} palavras nesta cena`;
 
-  // Atualiza total no header com o texto atual do editor (não salvo ainda)
   if (currentProject) {
     const total = (currentProject.scenes || []).reduce((acc, s) => {
       const t = s.id === currentScene?.id ? text : (s.text || '');
@@ -208,7 +239,6 @@ async function doSave(silent = false) {
   if (!currentProject || !currentScene) return;
   if (!silent) setSaveStatus('saving');
 
-  // Coleta valores do editor e das notas
   currentScene.text     = $('editor-textarea').value;
   currentScene.status   = $('notes-status').value;
   currentScene.nota     = $('notes-nota').value;
@@ -313,13 +343,8 @@ function showEditorState(state) {
   $('notes-content').classList.toggle('hidden', state !== 'scene');
 }
 
-function openModal(id) {
-  $(id).classList.remove('hidden');
-}
-
-function closeModal(id) {
-  $(id).classList.add('hidden');
-}
+function openModal(id)  { $(id).classList.remove('hidden'); }
+function closeModal(id) { $(id).classList.add('hidden'); }
 
 function showToast(msg, type = 'info') {
   const el = document.createElement('div');
@@ -338,23 +363,12 @@ document.addEventListener('DOMContentLoaded', () => {
     currentProject = null;
     currentScene   = null;
     projects       = [];
+    $('btn-save-now').classList.add('hidden');
+    $('btn-close-project').classList.add('hidden');
     showLoginScreen();
   });
 
-  // Volta para lista de projetos
-  $('btn-back-projects').addEventListener('click', async () => {
-    if (currentScene) {
-      clearTimeout(saveTimer);
-      await doSave(true);
-    }
-    currentProject = null;
-    currentScene   = null;
-    $('header-project-name').textContent = '';
-    $('header-words').textContent = '';
-    setSaveStatus('saved');
-    showSidebarState('projects');
-    showEditorState('empty');
-  });
+  $('btn-back-projects').addEventListener('click', closeCurrentProject);
 
   // Modais — novo projeto
   $('btn-new-project').addEventListener('click', () => {
@@ -372,7 +386,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   $('btn-create-scene').addEventListener('click', createScene);
 
-  // Fechar modais (botão × e backdrop)
+  // Fechar modais
   document.querySelectorAll('.modal-close, [data-close-modal]').forEach(btn => {
     btn.addEventListener('click', () => {
       const id = btn.dataset.closeModal || btn.closest('.modal')?.id;
@@ -406,6 +420,26 @@ document.addEventListener('DOMContentLoaded', () => {
       $(id)?.addEventListener('change', scheduleSave);
     });
 
+  // Tema claro/escuro
+  applyTheme(localStorage.getItem('df_theme') === 'dark');
+  $('btn-theme').addEventListener('click', () => {
+    const dark = document.documentElement.dataset.theme !== 'dark';
+    localStorage.setItem('df_theme', dark ? 'dark' : 'light');
+    applyTheme(dark);
+  });
+
+  // Salvar / Fechar projeto
+  $('btn-save-now').addEventListener('click', () => doSave(false));
+  $('btn-close-project').addEventListener('click', closeCurrentProject);
+
+  // Atalho ⌘S / Ctrl+S
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 's' && currentScene) {
+      e.preventDefault();
+      doSave(false);
+    }
+  });
+
   // Salva ao fechar aba/janela
   window.addEventListener('beforeunload', e => {
     if (saveStatus === 'pending' || saveStatus === 'saving') {
@@ -414,7 +448,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Enter nos modais
   $('new-project-title').addEventListener('keydown', e => { if (e.key === 'Enter') createProject(); });
   $('new-scene-title').addEventListener('keydown',   e => { if (e.key === 'Enter') createScene(); });
 
