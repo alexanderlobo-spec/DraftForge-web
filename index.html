@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="DraftForgeAI — Editor literário no navegador">
+  <title>DraftForgeAI</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="css/app.css">
+
+  <!-- Google Identity Services -->
+  <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" async defer></script>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     TELA DE LOGIN
+══════════════════════════════════════ -->
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-brand">✨ DraftForgeAI</div>
+    <p class="login-tagline">Acesse seus projetos do Google Drive<br>em qualquer dispositivo</p>
+    <button id="btn-login" class="btn-primary">Entrar com Google</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     APP PRINCIPAL
+══════════════════════════════════════ -->
+<div id="app" class="hidden">
+
+  <!-- HEADER -->
+  <header class="app-header">
+    <button class="sidebar-toggle" id="sidebar-toggle" aria-label="Menu">☰</button>
+    <div class="header-brand">✨ DraftForgeAI</div>
+    <div class="header-center" id="header-project-name"></div>
+    <div class="header-right">
+      <span class="save-indicator" id="save-indicator"></span>
+      <span id="header-words"></span>
+      <button class="btn-subtle" id="btn-logout">Sair</button>
+      <div class="user-badge" id="user-initial">?</div>
+    </div>
+  </header>
+
+  <!-- BODY (3 colunas) -->
+  <div class="app-body">
+
+    <!-- ── SIDEBAR ── -->
+    <aside class="sidebar" id="sidebar">
+
+      <!-- Estado 1: lista de projetos -->
+      <div id="sidebar-projects">
+        <div class="sidebar-section-header">
+          <span class="sidebar-section-label">Projetos</span>
+          <button class="btn-icon" id="btn-new-project" title="Novo projeto">+</button>
+        </div>
+        <div id="project-list"></div>
+      </div>
+
+      <!-- Estado 2: cenas do projeto ativo -->
+      <div id="sidebar-scenes" class="hidden">
+        <div class="sidebar-back-btn">
+          <button class="btn-back" id="btn-back-projects">← Projetos</button>
+        </div>
+        <div class="sidebar-project-title" id="sidebar-project-title"></div>
+        <div class="sidebar-new-scene">
+          <button class="btn-link" id="btn-new-scene">+ Nova cena</button>
+        </div>
+        <div id="scene-list"></div>
+      </div>
+
+    </aside>
+
+    <!-- ── EDITOR ── -->
+    <main class="editor-area">
+
+      <!-- Estado vazio -->
+      <div id="empty-state">Selecione um projeto para começar</div>
+
+      <!-- Editor de cena -->
+      <div id="scene-editor" class="hidden">
+        <div class="scene-header">
+          <div class="scene-act-label act-1-color" id="scene-act-label">ATO 1</div>
+          <h1 class="scene-title-h1" id="scene-title"></h1>
+          <p class="scene-subtitle-p" id="scene-subtitle"></p>
+        </div>
+        <div class="editor-wrap">
+          <textarea id="editor-textarea" placeholder="Comece a escrever esta cena…" spellcheck="true"></textarea>
+        </div>
+        <div class="editor-footer">
+          <span id="scene-word-count">0 palavras nesta cena</span>
+        </div>
+      </div>
+
+    </main>
+
+    <!-- ── NOTAS ── -->
+    <aside class="notes-panel">
+      <div class="notes-empty-msg" id="notes-empty">Selecione uma cena<br>para ver as notas</div>
+
+      <div id="notes-content" class="hidden">
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-status">Status</label>
+          <select id="notes-status">
+            <option value="todo">Rascunho</option>
+            <option value="notes">Notas apenas</option>
+            <option value="done">✓ Escrita</option>
+          </select>
+        </div>
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-nota">Notas da cena</label>
+          <textarea id="notes-nota" placeholder="Observações sobre esta cena…" rows="4"></textarea>
+        </div>
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-loc">Local</label>
+          <input id="notes-loc" type="text" placeholder="—">
+        </div>
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-pov">Ponto de vista</label>
+          <input id="notes-pov" type="text" placeholder="—">
+        </div>
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-tom">Tom</label>
+          <input id="notes-tom" type="text" placeholder="—">
+        </div>
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-objetivo">Objetivo da cena</label>
+          <textarea id="notes-objetivo" placeholder="—" rows="3"></textarea>
+        </div>
+
+        <div class="notes-section">
+          <label class="notes-label" for="notes-gancho">Gancho de saída</label>
+          <textarea id="notes-gancho" placeholder="—" rows="2"></textarea>
+        </div>
+
+      </div>
+    </aside>
+
+  </div><!-- /app-body -->
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════════
+     MODAL — Novo projeto
+══════════════════════════════════════ -->
+<div class="modal hidden" id="modal-new-project">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>Novo projeto</h2>
+      <button class="modal-close-btn" data-close-modal="modal-new-project">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label for="new-project-title">Título *</label>
+        <input id="new-project-title" type="text" placeholder="Título do projeto" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="new-project-author">Autor</label>
+        <input id="new-project-author" type="text" value="Alexander" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="new-project-publisher">Editora</label>
+        <input id="new-project-publisher" type="text" value="Lobo Publishers" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="new-project-desc">Descrição <span style="color:var(--muted)">(opcional)</span></label>
+        <input id="new-project-desc" type="text" placeholder="Uma breve descrição…" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-secondary" data-close-modal="modal-new-project">Cancelar</button>
+      <button class="btn-primary" id="btn-create-project">Criar projeto →</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     MODAL — Nova cena
+══════════════════════════════════════ -->
+<div class="modal hidden" id="modal-new-scene">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h2>Nova cena</h2>
+      <button class="modal-close-btn" data-close-modal="modal-new-scene">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-field">
+        <label for="new-scene-title">Título *</label>
+        <input id="new-scene-title" type="text" placeholder="Título da cena" autocomplete="off">
+      </div>
+      <div class="modal-field">
+        <label for="new-scene-act">Ato</label>
+        <select id="new-scene-act">
+          <option value="1">Ato 1 — Construção</option>
+          <option value="2">Ato 2 — Confronto</option>
+          <option value="3">Ato 3 — Resolução</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-secondary" data-close-modal="modal-new-scene">Cancelar</button>
+      <button class="btn-primary" id="btn-create-scene">Criar cena →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Scripts -->
+<script src="js/config.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/gdrive.js"></script>
+<script src="js/app.js"></script>
+
+<!-- Sidebar toggle para mobile -->
+<script>
+  const toggleBtn = document.getElementById('sidebar-toggle');
+  const sidebar   = document.getElementById('sidebar');
+  toggleBtn?.addEventListener('click', () => sidebar.classList.toggle('open'));
+  // Fecha sidebar ao clicar fora (mobile)
+  document.addEventListener('click', e => {
+    if (window.innerWidth <= 680 &&
+        sidebar.classList.contains('open') &&
+        !sidebar.contains(e.target) &&
+        e.target !== toggleBtn) {
+      sidebar.classList.remove('open');
+    }
+  });
+</script>
+
+</body>
+</html>
