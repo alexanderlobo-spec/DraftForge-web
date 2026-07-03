@@ -6,6 +6,8 @@ let currentProject = null;
 let currentScene   = null;
 let saveTimer      = null;
 let saveStatus     = 'saved';
+let focusMode      = false;
+let searchOpen     = false;
 
 const $ = id => document.getElementById(id);
 
@@ -53,6 +55,116 @@ function applyTheme(dark) {
   document.documentElement.dataset.theme = dark ? 'dark' : '';
   const btn = $('btn-theme');
   if (btn) btn.textContent = dark ? '☀️' : '🌙';
+}
+
+// ── Modo foco ──
+function toggleFocusMode() {
+  focusMode = !focusMode;
+  $('app').classList.toggle('focus-mode', focusMode);
+  $('btn-focus').textContent = focusMode ? 'Sair foco' : 'Foco';
+}
+
+// ── Fonte do editor ──
+function applyEditorFont(font) {
+  $('editor-textarea').style.fontFamily = font;
+  localStorage.setItem('df_editor_font', font);
+}
+
+// ── Largura do editor ──
+function applyEditorWidth(w) {
+  document.documentElement.style.setProperty('--editor-max-w', w + 'px');
+  localStorage.setItem('df_editor_width', String(w));
+}
+
+// ── Busca ──
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function escRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function runSearch(q) {
+  const query   = q.trim().toLowerCase();
+  const results = $('search-results');
+
+  if (!query || !currentProject) {
+    results.classList.add('hidden');
+    $('scene-list').classList.remove('hidden');
+    return;
+  }
+
+  $('scene-list').classList.add('hidden');
+  results.classList.remove('hidden');
+
+  const scenes  = currentProject.scenes || [];
+  const matches = scenes.filter(s =>
+    s.title.toLowerCase().includes(query) ||
+    stripHtml(s.text || '').toLowerCase().includes(query) ||
+    (s.nota || '').toLowerCase().includes(query)
+  );
+
+  if (matches.length === 0) {
+    results.innerHTML = '<div class="list-placeholder">Nenhum resultado encontrado.</div>';
+    return;
+  }
+
+  results.innerHTML = matches.map(s => {
+    const text    = stripHtml(s.text || '');
+    const textIdx = text.toLowerCase().indexOf(query);
+    let snippet   = '';
+
+    if (textIdx >= 0) {
+      const start  = Math.max(0, textIdx - 30);
+      const end    = Math.min(text.length, textIdx + query.length + 60);
+      const before = escHtml(text.slice(start, textIdx));
+      const match  = escHtml(text.slice(textIdx, textIdx + query.length));
+      const after  = escHtml(text.slice(textIdx + query.length, end));
+      snippet = (start > 0 ? '…' : '') + before + `<mark>${match}</mark>` + after + (end < text.length ? '…' : '');
+    }
+
+    const titleIdx = s.title.toLowerCase().indexOf(query);
+    let titleHtml;
+    if (titleIdx >= 0) {
+      titleHtml =
+        escHtml(s.title.slice(0, titleIdx)) +
+        `<mark>${escHtml(s.title.slice(titleIdx, titleIdx + query.length))}</mark>` +
+        escHtml(s.title.slice(titleIdx + query.length));
+    } else {
+      titleHtml = escHtml(s.title);
+    }
+
+    return `<div class="search-result-item" data-id="${s.id}">
+      <div class="search-result-title">${titleHtml}</div>
+      ${snippet ? `<div class="search-result-snippet">${snippet}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  results.querySelectorAll('.search-result-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const id    = parseInt(el.dataset.id);
+      const scene = currentProject.scenes.find(s => s.id === id);
+      if (scene) { closeSearch(); openScene(scene); }
+    });
+  });
+}
+
+function openSearch() {
+  searchOpen = true;
+  $('sidebar-search-box').classList.remove('hidden');
+  $('btn-search-toggle').textContent = '✕';
+  $('btn-search-toggle').title = 'Fechar busca';
+  setTimeout(() => $('search-input').focus(), 40);
+}
+
+function closeSearch() {
+  searchOpen = false;
+  $('sidebar-search-box').classList.add('hidden');
+  $('search-input').value = '';
+  $('search-results').classList.add('hidden');
+  $('scene-list').classList.remove('hidden');
+  $('btn-search-toggle').textContent = '🔍';
+  $('btn-search-toggle').title = 'Buscar nas cenas';
 }
 
 // ── Projetos ──
@@ -122,9 +234,13 @@ async function openProject(slug) {
   showEditorState('empty');
   $('btn-save-now').classList.remove('hidden');
   $('btn-close-project').classList.remove('hidden');
+  $('btn-focus').classList.remove('hidden');
 }
 
 async function closeCurrentProject() {
+  if (focusMode) toggleFocusMode();
+  if (searchOpen) closeSearch();
+
   if (currentScene) {
     clearTimeout(saveTimer);
     await doSave(true);
@@ -136,6 +252,7 @@ async function closeCurrentProject() {
   setSaveStatus('saved');
   $('btn-save-now').classList.add('hidden');
   $('btn-close-project').classList.add('hidden');
+  $('btn-focus').classList.add('hidden');
   showSidebarState('projects');
   showEditorState('empty');
 }
@@ -198,7 +315,6 @@ async function openScene(scene) {
   $('scene-title').textContent     = scene.title;
   $('scene-subtitle').textContent  = scene.subtitle || '';
 
-  // stripHtml limpa HTML armazenado pelo app desktop
   $('editor-textarea').value = stripHtml(scene.text || '');
   updateWordCount();
 
@@ -263,10 +379,10 @@ function setSaveStatus(status) {
   saveStatus = status;
   const el = $('save-indicator');
   const map = {
-    pending: ['',              ''],
-    saving:  ['● Salvando…',  'saving'],
-    saved:   ['✓ Salvo',      'saved'],
-    error:   ['⚠ Erro ao salvar', 'error']
+    pending: ['',                   ''],
+    saving:  ['● Salvando…',       'saving'],
+    saved:   ['✓ Salvo',           'saved'],
+    error:   ['⚠ Erro ao salvar',  'error']
   };
   const [text, cls] = map[status] || ['', ''];
   el.textContent = text;
@@ -359,12 +475,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btn-login').addEventListener('click', login);
   $('btn-logout').addEventListener('click', () => {
+    if (focusMode) toggleFocusMode();
+    if (searchOpen) closeSearch();
     logout();
     currentProject = null;
     currentScene   = null;
     projects       = [];
     $('btn-save-now').classList.add('hidden');
     $('btn-close-project').classList.add('hidden');
+    $('btn-focus').classList.add('hidden');
     showLoginScreen();
   });
 
@@ -432,11 +551,40 @@ document.addEventListener('DOMContentLoaded', () => {
   $('btn-save-now').addEventListener('click', () => doSave(false));
   $('btn-close-project').addEventListener('click', closeCurrentProject);
 
-  // Atalho ⌘S / Ctrl+S
+  // Modo foco
+  $('btn-focus').addEventListener('click', toggleFocusMode);
+
+  // Fonte do editor
+  $('select-font').addEventListener('change', () => applyEditorFont($('select-font').value));
+
+  // Largura do editor
+  $('slider-width').addEventListener('input', () => applyEditorWidth($('slider-width').value));
+
+  // Busca
+  $('btn-search-toggle').addEventListener('click', () => searchOpen ? closeSearch() : openSearch());
+  $('search-input').addEventListener('input',   () => runSearch($('search-input').value));
+  $('search-input').addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch(); });
+
+  // Inicializar fonte e largura do localStorage
+  const savedFont  = localStorage.getItem('df_editor_font');
+  const savedWidth = localStorage.getItem('df_editor_width') || '700';
+  if (savedFont) {
+    applyEditorFont(savedFont);
+    $('select-font').value = savedFont;
+  }
+  applyEditorWidth(savedWidth);
+  $('slider-width').value = savedWidth;
+
+  // Atalhos de teclado
   document.addEventListener('keydown', e => {
     if ((e.ctrlKey || e.metaKey) && e.key === 's' && currentScene) {
       e.preventDefault();
       doSave(false);
+    }
+    if (e.key === 'Escape' && focusMode) toggleFocusMode();
+    if (e.key === 'F11' && currentScene) {
+      e.preventDefault();
+      toggleFocusMode();
     }
   });
 

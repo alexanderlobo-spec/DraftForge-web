@@ -48,6 +48,7 @@
       <span id="header-words"></span>
       <button class="btn-subtle hidden" id="btn-save-now" title="Salvar (⌘S)">Salvar</button>
       <button class="btn-subtle hidden" id="btn-close-project" title="Fechar projeto">Fechar</button>
+      <button class="btn-subtle hidden" id="btn-focus" title="Modo foco (F11)">Foco</button>
       <button class="btn-subtle" id="btn-theme" title="Alternar tema">🌙</button>
       <button class="btn-subtle" id="btn-logout">Sair</button>
       <div class="user-badge" id="user-initial">?</div>
@@ -73,12 +74,20 @@
       <div id="sidebar-scenes" class="hidden">
         <div class="sidebar-back-btn">
           <button class="btn-back" id="btn-back-projects">← Projetos</button>
+          <button class="btn-icon" id="btn-search-toggle" title="Buscar nas cenas">🔍</button>
         </div>
         <div class="sidebar-project-title" id="sidebar-project-title"></div>
+
+        <!-- Caixa de busca (oculta por padrão) -->
+        <div class="sidebar-search hidden" id="sidebar-search-box">
+          <input type="text" id="search-input" placeholder="Buscar nas cenas…" autocomplete="off">
+        </div>
+
         <div class="sidebar-new-scene">
           <button class="btn-link" id="btn-new-scene">+ Nova cena</button>
         </div>
         <div id="scene-list"></div>
+        <div id="search-results" class="hidden"></div>
       </div>
 
     </aside>
@@ -96,6 +105,23 @@
           <h1 class="scene-title-h1" id="scene-title"></h1>
           <p class="scene-subtitle-p" id="scene-subtitle"></p>
         </div>
+
+        <!-- Barra de ferramentas: fonte + largura -->
+        <div class="editor-toolbar" id="editor-toolbar">
+          <label class="toolbar-label" for="select-font">Fonte</label>
+          <select id="select-font" class="toolbar-select">
+            <option value="Georgia, 'Times New Roman', serif">Georgia</option>
+            <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+          </select>
+          <span class="toolbar-sep"></span>
+          <label class="toolbar-label" for="slider-width">Largura</label>
+          <input type="range" id="slider-width" min="480" max="960" step="20" value="700" class="toolbar-slider" title="Largura da área de escrita">
+        </div>
+
         <div class="editor-wrap">
           <textarea id="editor-textarea" placeholder="Comece a escrever esta cena…" spellcheck="true"></textarea>
         </div>
@@ -232,7 +258,6 @@
   const toggleBtn = document.getElementById('sidebar-toggle');
   const sidebar   = document.getElementById('sidebar');
   toggleBtn?.addEventListener('click', () => sidebar.classList.toggle('open'));
-  // Fecha sidebar ao clicar fora (mobile)
   document.addEventListener('click', e => {
     if (window.innerWidth <= 680 &&
         sidebar.classList.contains('open') &&
