@@ -7,7 +7,6 @@ let currentScene   = null;
 let saveTimer      = null;
 let saveStatus     = 'saved';
 let focusMode      = false;
-let searchOpen     = false;
 
 const $ = id => document.getElementById(id);
 
@@ -23,6 +22,10 @@ function stripHtml(html) {
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .trim();
+}
+
+function escHtml(s) {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 // ── Inicialização ──
@@ -57,24 +60,36 @@ function applyTheme(dark) {
   if (btn) btn.textContent = dark ? '☀️' : '🌙';
 }
 
+// ── Editor ativo (normal ou dentro do modo foco) ──
+function activeEditor() {
+  return focusMode ? $('focus-editor') : $('editor-textarea');
+}
+
 // ── Modo foco — overlay em tela cheia ──
 let focusHintTimer = null;
+
+function syncFocusContent() {
+  if (!currentScene) return;
+  $('focus-scene-title').textContent = currentScene.title || '';
+  $('focus-editor').value = $('editor-textarea').value;
+  $('focus-editor').style.fontFamily = $('editor-textarea').style.fontFamily || '';
+  $('focus-editor').style.fontSize   = $('editor-textarea').style.fontSize   || '';
+  syncZoom($('slider-width').value);
+  updateFocusWordCount();
+}
 
 function enterFocus() {
   if (!currentScene) return;
   focusMode = true;
 
-  $('focus-scene-title').textContent = currentScene.title || '';
-  $('focus-editor').value = $('editor-textarea').value;
-  $('focus-editor').style.fontFamily = $('editor-textarea').style.fontFamily || '';
-  syncZoom($('slider-width').value);
-
+  syncFocusContent();
   $('focus-overlay').classList.remove('hidden');
-  updateFocusWordCount();
   showFocusHint();
   $('focus-editor').focus();
 
-  $('btn-focus').textContent = 'Sair foco';
+  $('btn-focus').classList.add('active');
+  $('btn-focus').querySelector('.btn-label').textContent = 'Sair foco';
+  if (Find.isOpen) Find.reposition();
 }
 
 function exitFocus() {
@@ -86,7 +101,9 @@ function exitFocus() {
   scheduleSave();
 
   $('focus-overlay').classList.add('hidden');
-  $('btn-focus').textContent = 'Foco';
+  $('btn-focus').classList.remove('active');
+  $('btn-focus').querySelector('.btn-label').textContent = 'Foco';
+  if (Find.isOpen) Find.reposition();
 }
 
 function toggleFocusMode() {
@@ -105,10 +122,38 @@ function showFocusHint() {
   focusHintTimer = setTimeout(() => hint.classList.remove('show'), 3000);
 }
 
-// ── Fonte do editor ──
-function applyEditorFont(font) {
-  $('editor-textarea').style.fontFamily = font;
-  localStorage.setItem('df_editor_font', font);
+// ── Fonte e tamanho do editor ──
+const EDITOR_FONTS = [
+  { label: 'Lora',            css: "'Lora', Georgia, serif" },
+  { label: 'Newsreader',      css: "'Newsreader', Georgia, serif" },
+  { label: 'Georgia',         css: "Georgia, 'Times New Roman', serif" },
+  { label: 'Times New Roman', css: "'Times New Roman', Times, serif" },
+  { label: 'Garamond',        css: "'EB Garamond', Garamond, Georgia, serif" },
+  { label: 'Instrument Sans', css: "'Instrument Sans', system-ui, sans-serif" },
+  { label: 'Arial',           css: "Arial, Helvetica, sans-serif" },
+  { label: 'Courier',         css: "'Courier New', Courier, monospace" },
+];
+const EDITOR_SIZES = [12, 13, 14, 15, 16, 18, 20, 22, 24, 28];
+
+function buildFontControls() {
+  const fSel = $('select-font');
+  const sSel = $('select-font-size');
+  fSel.innerHTML = EDITOR_FONTS.map(f => `<option value="${escHtml(f.css)}">${escHtml(f.label)}</option>`).join('');
+  sSel.innerHTML = EDITOR_SIZES.map(s => `<option value="${s}">${s} px</option>`).join('');
+  fSel.value = EDITOR_FONTS[0].css;
+  sSel.value = '16';
+}
+
+function applyEditorFont(css) {
+  $('editor-textarea').style.fontFamily = css;
+  $('focus-editor').style.fontFamily    = css;
+  localStorage.setItem('df_editor_font', css);
+}
+
+function applyEditorFontSize(px) {
+  $('editor-textarea').style.fontSize = px + 'px';
+  $('focus-editor').style.fontSize    = px + 'px';
+  localStorage.setItem('df_editor_font_size', String(px));
 }
 
 // ── Zoom da área de escrita (a página tem largura fixa; o slider só amplia/reduz visualmente, sem mover onde o texto quebra) ──
@@ -117,101 +162,183 @@ const EDITOR_BASE_W = 700;
 function syncZoom(value) {
   const ratio = (value / EDITOR_BASE_W).toFixed(3);
   $('editor-textarea').style.zoom = ratio;
-  const focusEditor = $('focus-editor');
-  if (focusEditor) focusEditor.style.zoom = ratio;
+  $('focus-editor').style.zoom    = ratio;
   localStorage.setItem('df_editor_width', String(value));
 }
 
-// ── Busca ──
-function escHtml(s) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function escRegex(s) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+// ── Busca — todo o livro (todas as cenas do projeto), barra flutuante ──
+// Nota: o editor aqui é um <textarea> (texto puro), não contenteditable como no
+// desktop, então não dá para usar a CSS Custom Highlight API para marcar todas
+// as ocorrências ao mesmo tempo dentro do texto. Em vez disso, o resultado atual
+// é marcado via seleção nativa do navegador (setSelectionRange) e a view rola
+// até ele — mesmo efeito prático de "ir até a ocorrência e vê-la destacada".
+const Find = {
+  isOpen: false,
+  q: '',
+  matches: [],
+  current: -1,
+  chaptersWithHits: 0,
+  _debounce: null,
 
-function runSearch(q) {
-  const query   = q.trim().toLowerCase();
-  const results = $('search-results');
+  toggle() { this.isOpen ? this.close() : this.open(); },
 
-  if (!query || !currentProject) {
-    results.classList.add('hidden');
-    $('scene-list').classList.remove('hidden');
-    return;
-  }
+  open() {
+    if (!currentProject) { showToast('Abra um projeto para buscar', 'info'); return; }
+    this.isOpen = true;
+    $('find-bar').classList.remove('hidden');
+    this.reposition();
+    $('btn-find').classList.add('active');
 
-  $('scene-list').classList.add('hidden');
-  results.classList.remove('hidden');
+    const input = $('find-input');
+    input.focus();
+    input.select();
+    if (input.value.trim()) this.search(input.value);
+  },
 
-  const scenes  = currentProject.scenes || [];
-  const matches = scenes.filter(s =>
-    s.title.toLowerCase().includes(query) ||
-    stripHtml(s.text || '').toLowerCase().includes(query) ||
-    (s.nota || '').toLowerCase().includes(query)
-  );
+  close() {
+    this.isOpen = false;
+    $('find-bar').classList.add('hidden');
+    $('btn-find').classList.remove('active');
+    activeEditor()?.focus();
+  },
 
-  if (matches.length === 0) {
-    results.innerHTML = '<div class="list-placeholder">Nenhum resultado encontrado.</div>';
-    return;
-  }
+  reposition() {
+    $('find-bar').classList.toggle('in-focus', focusMode);
+  },
 
-  results.innerHTML = matches.map(s => {
-    const text    = stripHtml(s.text || '');
-    const textIdx = text.toLowerCase().indexOf(query);
-    let snippet   = '';
-
-    if (textIdx >= 0) {
-      const start  = Math.max(0, textIdx - 30);
-      const end    = Math.min(text.length, textIdx + query.length + 60);
-      const before = escHtml(text.slice(start, textIdx));
-      const match  = escHtml(text.slice(textIdx, textIdx + query.length));
-      const after  = escHtml(text.slice(textIdx + query.length, end));
-      snippet = (start > 0 ? '…' : '') + before + `<mark>${match}</mark>` + after + (end < text.length ? '…' : '');
+  search(q) {
+    q = (q || '').trim();
+    this.q = q;
+    if (!currentProject || !q) {
+      this.matches = []; this.current = -1; this.chaptersWithHits = 0;
+      this._renderInfo(); this._renderResults();
+      return;
     }
 
-    const titleIdx = s.title.toLowerCase().indexOf(query);
-    let titleHtml;
-    if (titleIdx >= 0) {
-      titleHtml =
-        escHtml(s.title.slice(0, titleIdx)) +
-        `<mark>${escHtml(s.title.slice(titleIdx, titleIdx + query.length))}</mark>` +
-        escHtml(s.title.slice(titleIdx + query.length));
-    } else {
-      titleHtml = escHtml(s.title);
-    }
+    const needle = q.toLowerCase();
+    const list = [];
+    let chaptersWithHits = 0;
 
-    return `<div class="search-result-item" data-id="${s.id}">
-      <div class="search-result-title">${titleHtml}</div>
-      ${snippet ? `<div class="search-result-snippet">${snippet}</div>` : ''}
-    </div>`;
-  }).join('');
-
-  results.querySelectorAll('.search-result-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const id    = parseInt(el.dataset.id);
-      const scene = currentProject.scenes.find(s => s.id === id);
-      if (scene) { closeSearch(); openScene(scene); }
+    (currentProject.scenes || []).forEach(scene => {
+      const text = stripHtml(scene.text || '');
+      const hay  = text.toLowerCase();
+      let from = 0, idxInScene = 0, hadHit = false;
+      while (true) {
+        const at = hay.indexOf(needle, from);
+        if (at < 0) break;
+        hadHit = true;
+        list.push({
+          sceneId: scene.id,
+          idxInScene,
+          title:   scene.title || 'Sem título',
+          act:     scene.act,
+          offset:  at,
+          length:  q.length,
+          snippet: this._snippet(text, at, q.length)
+        });
+        idxInScene++;
+        from = at + needle.length;
+      }
+      if (hadHit) chaptersWithHits++;
     });
-  });
-}
 
-function openSearch() {
-  searchOpen = true;
-  $('sidebar-search-box').classList.remove('hidden');
-  $('btn-search-toggle').textContent = '✕';
-  $('btn-search-toggle').title = 'Fechar busca';
-  setTimeout(() => $('search-input').focus(), 40);
-}
+    this.matches = list;
+    this.chaptersWithHits = chaptersWithHits;
+    if (!list.length) this.current = -1;
+    else if (this.current >= list.length) this.current = -1;
 
-function closeSearch() {
-  searchOpen = false;
-  $('sidebar-search-box').classList.add('hidden');
-  $('search-input').value = '';
-  $('search-results').classList.add('hidden');
-  $('scene-list').classList.remove('hidden');
-  $('btn-search-toggle').textContent = '🔍';
-  $('btn-search-toggle').title = 'Buscar nas cenas';
-}
+    this._renderInfo();
+    this._renderResults();
+  },
+
+  _snippet(text, at, len) {
+    const PRE = 28, POST = 34;
+    const before = text.slice(Math.max(0, at - PRE), at);
+    const hit    = text.slice(at, at + len);
+    const after  = text.slice(at + len, at + len + POST);
+    return {
+      before: (at > PRE ? '…' : '') + before,
+      hit,
+      after: after + (at + len + POST < text.length ? '…' : '')
+    };
+  },
+
+  next() { if (this.matches.length) { this.current = (this.current + 1) % this.matches.length; this._goTo(); } },
+  prev() { if (this.matches.length) { this.current = (this.current - 1 + this.matches.length) % this.matches.length; this._goTo(); } },
+
+  goToResult(i) {
+    this.current = i;
+    this._goTo();
+    $('find-input').focus();
+  },
+
+  async _goTo() {
+    const m = this.matches[this.current];
+    if (!m) return;
+
+    if (!currentScene || currentScene.id !== m.sceneId) {
+      const scene = currentProject.scenes.find(s => s.id === m.sceneId);
+      if (!scene) return;
+      await openScene(scene);
+      if (focusMode) syncFocusContent();
+    }
+
+    const ed = activeEditor();
+    ed.focus();
+    ed.setSelectionRange(m.offset, m.offset + m.length);
+    this._scrollToOffset(ed, m.offset);
+
+    this._renderInfo();
+    this._renderResults();
+  },
+
+  _scrollToOffset(ta, offset) {
+    const before = ta.value.slice(0, offset);
+    const line = before.split('\n').length - 1;
+    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 24;
+    ta.scrollTop = Math.max(0, line * lineHeight - ta.clientHeight / 2);
+  },
+
+  _renderInfo() {
+    const info = $('find-count');
+    if (!this.q) { info.textContent = ''; return; }
+    const total = this.matches.length;
+    if (!total) { info.textContent = 'Nenhum resultado'; return; }
+    const pos = this.current >= 0 ? `${this.current + 1}/` : '';
+    const caps = this.chaptersWithHits === 1 ? '1 cena' : `${this.chaptersWithHits} cenas`;
+    info.textContent = `${pos}${total} · ${caps}`;
+  },
+
+  _renderResults() {
+    const box = $('find-results');
+    box.innerHTML = '';
+    if (!this.q || !this.matches.length) { box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+
+    const MAX = 200;
+    this.matches.slice(0, MAX).forEach((m, i) => {
+      const row = document.createElement('button');
+      row.className = 'find-result' + (i === this.current ? ' active' : '');
+      row.innerHTML = `
+        <span class="find-result-cap act-${m.act}">${m.sceneId}</span>
+        <span class="find-result-body">
+          <span class="find-result-title">${escHtml(m.title)}</span>
+          <span class="find-result-snip">${escHtml(m.snippet.before)}<mark>${escHtml(m.snippet.hit)}</mark>${escHtml(m.snippet.after)}</span>
+        </span>`;
+      row.addEventListener('click', () => this.goToResult(i));
+      box.appendChild(row);
+    });
+
+    if (this.matches.length > MAX) {
+      const more = document.createElement('div');
+      more.className = 'find-result-more';
+      more.textContent = `+ ${this.matches.length - MAX} resultados não listados`;
+      box.appendChild(more);
+    }
+
+    box.querySelector('.find-result.active')?.scrollIntoView({ block: 'nearest' });
+  }
+};
 
 // ── Projetos ──
 async function loadAllProjects() {
@@ -281,11 +408,12 @@ async function openProject(slug) {
   $('btn-save-now').classList.remove('hidden');
   $('btn-close-project').classList.remove('hidden');
   $('btn-focus').classList.remove('hidden');
+  $('btn-find').classList.remove('hidden');
 }
 
 async function closeCurrentProject() {
   exitFocus();
-  if (searchOpen) closeSearch();
+  Find.close();
 
   if (currentScene) {
     clearTimeout(saveTimer);
@@ -299,6 +427,7 @@ async function closeCurrentProject() {
   $('btn-save-now').classList.add('hidden');
   $('btn-close-project').classList.add('hidden');
   $('btn-focus').classList.add('hidden');
+  $('btn-find').classList.add('hidden');
   showSidebarState('projects');
   showEditorState('empty');
 }
@@ -373,7 +502,7 @@ async function openScene(scene) {
   $('notes-gancho').value   = scene.gancho   || '';
 
   showEditorState('scene');
-  $('editor-textarea').focus();
+  if (!focusMode) $('editor-textarea').focus();
 }
 
 // ── Auto-save ──
@@ -519,10 +648,12 @@ function showToast(msg, type = 'info') {
 // ── Event listeners ──
 document.addEventListener('DOMContentLoaded', () => {
 
+  buildFontControls();
+
   $('btn-login').addEventListener('click', login);
   $('btn-logout').addEventListener('click', () => {
     exitFocus();
-    if (searchOpen) closeSearch();
+    Find.close();
     logout();
     currentProject = null;
     currentScene   = null;
@@ -530,6 +661,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('btn-save-now').classList.add('hidden');
     $('btn-close-project').classList.add('hidden');
     $('btn-focus').classList.add('hidden');
+    $('btn-find').classList.add('hidden');
     showLoginScreen();
   });
 
@@ -599,25 +731,47 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Modo foco
   $('btn-focus').addEventListener('click', toggleFocusMode);
+  $('btn-exit-focus').addEventListener('click', exitFocus);
+  $('focus-editor').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); exitFocus(); }
+  });
+  $('focus-editor').addEventListener('input', () => {
+    updateFocusWordCount();
+    $('editor-textarea').value = $('focus-editor').value;
+    updateWordCount();
+    scheduleSave();
+  });
+  $('focus-overlay').addEventListener('mousemove', showFocusHint);
+  $('btn-focus-find').addEventListener('click', () => Find.open());
 
-  // Fonte do editor
+  // Fonte e tamanho do editor
   $('select-font').addEventListener('change', () => applyEditorFont($('select-font').value));
+  $('select-font-size').addEventListener('change', () => applyEditorFontSize($('select-font-size').value));
 
   // Zoom da área de escrita
   $('slider-width').addEventListener('input', () => syncZoom($('slider-width').value));
 
   // Busca
-  $('btn-search-toggle').addEventListener('click', () => searchOpen ? closeSearch() : openSearch());
-  $('search-input').addEventListener('input',   () => runSearch($('search-input').value));
-  $('search-input').addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch(); });
+  $('btn-find').addEventListener('click', () => Find.toggle());
+  $('find-close').addEventListener('click', () => Find.close());
+  $('find-next').addEventListener('click',  () => Find.next());
+  $('find-prev').addEventListener('click',  () => Find.prev());
+  $('find-input').addEventListener('input', () => {
+    clearTimeout(Find._debounce);
+    Find._debounce = setTimeout(() => Find.search($('find-input').value), 150);
+  });
+  $('find-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter')       { e.preventDefault(); e.shiftKey ? Find.prev() : Find.next(); }
+    else if (e.key === 'Escape') { e.preventDefault(); Find.close(); }
+  });
 
-  // Inicializar fonte e zoom do localStorage
+  // Inicializar fonte, tamanho e zoom do localStorage
   const savedFont = localStorage.getItem('df_editor_font');
-  const savedZoom = localStorage.getItem('df_editor_width') || '700';
-  if (savedFont) {
-    applyEditorFont(savedFont);
-    $('select-font').value = savedFont;
-  }
+  const savedSize = localStorage.getItem('df_editor_font_size') || '16';
+  const savedZoom = localStorage.getItem('df_editor_width')     || '700';
+  if (savedFont) { applyEditorFont(savedFont); $('select-font').value = savedFont; }
+  applyEditorFontSize(savedSize);
+  $('select-font-size').value = savedSize;
   $('slider-width').value = savedZoom;
   syncZoom(savedZoom);
 
@@ -631,20 +785,11 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       toggleFocusMode();
     }
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F') && currentProject) {
+      e.preventDefault();
+      Find.toggle();
+    }
   });
-
-  // Modo foco: Esc para sair, digitação sincroniza de volta com o editor principal
-  $('focus-editor').addEventListener('keydown', e => {
-    if (e.key === 'Escape') { e.preventDefault(); exitFocus(); }
-  });
-  $('focus-editor').addEventListener('input', () => {
-    updateFocusWordCount();
-    $('editor-textarea').value = $('focus-editor').value;
-    updateWordCount();
-    scheduleSave();
-  });
-  $('focus-overlay').addEventListener('mousemove', showFocusHint);
-  $('btn-exit-focus').addEventListener('click', exitFocus);
 
   // Salva ao fechar aba/janela
   window.addEventListener('beforeunload', e => {

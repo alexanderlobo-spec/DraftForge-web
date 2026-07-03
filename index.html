@@ -9,7 +9,7 @@
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@400;500;600&family=Lora:ital,wght@0,400;0,600;1,400&family=Newsreader:ital,wght@0,400;1,400&family=EB+Garamond:ital,wght@0,400;1,400&family=Instrument+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 
   <!-- App styles -->
   <link rel="stylesheet" href="css/app.css">
@@ -48,7 +48,14 @@
       <span id="header-words"></span>
       <button class="btn-subtle hidden" id="btn-save-now" title="Salvar (⌘S)">Salvar</button>
       <button class="btn-subtle hidden" id="btn-close-project" title="Fechar projeto">Fechar</button>
-      <button class="btn-subtle hidden" id="btn-focus" title="Modo foco (⌘⇧F)">Foco</button>
+      <button class="btn-subtle hidden" id="btn-find" title="Buscar no livro (⌘F)">
+        <svg class="btn-svg-icon" viewBox="0 0 512 512" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M500.3 443.7l-119.7-119.7c27.22-40.41 40.65-90.9 33.4-144.7C401.8 87.79 326.8 13.32 235.2 1.723C99.01-15.51-15.51 99.01 1.724 235.2c11.6 91.64 86.08 166.7 177.6 178.9c53.8 7.25 104.3-6.18 144.7-33.4l119.7 119.7c15.62 15.62 40.95 15.62 56.57 0C515.9 484.7 515.9 459.3 500.3 443.7zM79.1 208c0-70.58 57.42-128 128-128s128 57.42 128 128c0 70.58-57.42 128-128 128S79.1 278.6 79.1 208z"/></svg>
+        <span class="btn-label">Buscar</span>
+      </button>
+      <button class="btn-subtle hidden" id="btn-focus" title="Modo foco (⌘⇧F)">
+        <svg class="btn-svg-icon" viewBox="0 -960 960 960" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M200-120q-33 0-56.5-23.5T120-200v-120q0-17 11.5-28.5T160-360q17 0 28.5 11.5T200-320v120h120q17 0 28.5 11.5T360-160q0 17-11.5 28.5T320-120H200Zm560 0H640q-17 0-28.5-11.5T600-160q0-17 11.5-28.5T640-200h120v-120q0-17 11.5-28.5T800-360q17 0 28.5 11.5T840-320v120q0 33-23.5 56.5T760-120ZM120-640v-120q0-33 23.5-56.5T200-840h120q17 0 28.5 11.5T360-800q0 17-11.5 28.5T320-760H200v120q0 17-11.5 28.5T160-600q-17 0-28.5-11.5T120-640Zm640 0v-120H640q-17 0-28.5-11.5T600-800q0-17 11.5-28.5T640-840h120q33 0 56.5 23.5T840-760v120q0 17-11.5 28.5T800-600q-17 0-28.5-11.5T760-640ZM338.5-338.5Q280-397 280-480t58.5-141.5Q397-680 480-680t141.5 58.5Q680-563 680-480t-58.5 141.5Q563-280 480-280t-141.5-58.5ZM565-395q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm-85-85Z"/></svg>
+        <span class="btn-label">Foco</span>
+      </button>
       <button class="btn-subtle" id="btn-theme" title="Alternar tema">🌙</button>
       <button class="btn-subtle" id="btn-logout">Sair</button>
       <div class="user-badge" id="user-initial">?</div>
@@ -74,20 +81,12 @@
       <div id="sidebar-scenes" class="hidden">
         <div class="sidebar-back-btn">
           <button class="btn-back" id="btn-back-projects">← Projetos</button>
-          <button class="btn-icon" id="btn-search-toggle" title="Buscar nas cenas">🔍</button>
         </div>
         <div class="sidebar-project-title" id="sidebar-project-title"></div>
-
-        <!-- Caixa de busca (oculta por padrão) -->
-        <div class="sidebar-search hidden" id="sidebar-search-box">
-          <input type="text" id="search-input" placeholder="Buscar nas cenas…" autocomplete="off">
-        </div>
-
         <div class="sidebar-new-scene">
           <button class="btn-link" id="btn-new-scene">+ Nova cena</button>
         </div>
         <div id="scene-list"></div>
-        <div id="search-results" class="hidden"></div>
       </div>
 
     </aside>
@@ -106,20 +105,24 @@
           <p class="scene-subtitle-p" id="scene-subtitle"></p>
         </div>
 
-        <!-- Barra de ferramentas: fonte + largura -->
+        <!-- Barra de ferramentas: fonte + zoom da página -->
         <div class="editor-toolbar" id="editor-toolbar">
-          <label class="toolbar-label" for="select-font">Fonte</label>
-          <select id="select-font" class="toolbar-select">
-            <option value="Georgia, 'Times New Roman', serif">Georgia</option>
-            <option value="'Palatino Linotype', Palatino, serif">Palatino</option>
-            <option value="'Times New Roman', serif">Times New Roman</option>
-            <option value="'Courier New', monospace">Courier New</option>
-            <option value="Arial, sans-serif">Arial</option>
-            <option value="Verdana, sans-serif">Verdana</option>
-          </select>
+          <div class="toolbar-icon-ctrl" title="Fonte padrão de escrita">
+            <svg width="13" height="11" viewBox="0 0 13 11" fill="currentColor" opacity="0.55" aria-hidden="true">
+              <path d="M6.5 0 L11 11 L9 11 L8 8.2 L5 8.2 L4 11 L2 11 Z M5.6 6.5 L7.4 6.5 L6.5 3.6 Z"/>
+            </svg>
+            <select id="select-font" class="toolbar-select" title="Tipo de letra padrão"></select>
+            <select id="select-font-size" class="toolbar-select toolbar-select-sm" title="Tamanho padrão"></select>
+          </div>
           <span class="toolbar-sep"></span>
-          <label class="toolbar-label" for="slider-width">Zoom</label>
-          <input type="range" id="slider-width" min="350" max="2100" step="20" value="700" class="toolbar-slider" title="Zoom da página de escrita (não move as linhas)">
+          <div class="toolbar-icon-ctrl" title="Zoom da página de escrita (a página tem tamanho fixo — o texto não reflui)">
+            <svg width="13" height="11" viewBox="0 0 13 11" fill="currentColor" opacity="0.55" aria-hidden="true">
+              <rect x="0" y="4.5" width="13" height="2" rx="1"/>
+              <path d="M2 4.5 L0 6.5 L2 8.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M11 4.5 L13 6.5 L11 8.5" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <input type="range" id="slider-width" min="350" max="2100" step="20" value="700" class="toolbar-slider">
+          </div>
         </div>
 
         <div class="editor-wrap">
@@ -193,7 +196,25 @@
     <span id="focus-wordcount"></span>
   </div>
   <div id="focus-hint">ESC para sair do modo foco</div>
+  <button id="btn-focus-find" title="Buscar no livro (⌘F)">
+    <svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M500.3 443.7l-119.7-119.7c27.22-40.41 40.65-90.9 33.4-144.7C401.8 87.79 326.8 13.32 235.2 1.723C99.01-15.51-15.51 99.01 1.724 235.2c11.6 91.64 86.08 166.7 177.6 178.9c53.8 7.25 104.3-6.18 144.7-33.4l119.7 119.7c15.62 15.62 40.95 15.62 56.57 0C515.9 484.7 515.9 459.3 500.3 443.7zM79.1 208c0-70.58 57.42-128 128-128s128 57.42 128 128c0 70.58-57.42 128-128 128S79.1 278.6 79.1 208z"/></svg>
+  </button>
   <button id="btn-exit-focus" title="Sair do modo foco (Esc)">×</button>
+</div>
+
+<!-- ══════════════════════════════════════
+     BUSCA — barra flutuante (todo o livro)
+══════════════════════════════════════ -->
+<div id="find-bar" class="hidden">
+  <span class="find-icon" aria-hidden="true">
+    <svg viewBox="0 0 512 512" width="14" height="14" fill="currentColor"><path d="M500.3 443.7l-119.7-119.7c27.22-40.41 40.65-90.9 33.4-144.7C401.8 87.79 326.8 13.32 235.2 1.723C99.01-15.51-15.51 99.01 1.724 235.2c11.6 91.64 86.08 166.7 177.6 178.9c53.8 7.25 104.3-6.18 144.7-33.4l119.7 119.7c15.62 15.62 40.95 15.62 56.57 0C515.9 484.7 515.9 459.3 500.3 443.7zM79.1 208c0-70.58 57.42-128 128-128s128 57.42 128 128c0 70.58-57.42 128-128 128S79.1 278.6 79.1 208z"/></svg>
+  </span>
+  <input type="text" id="find-input" placeholder="Buscar palavras ou frases no livro…" autocomplete="off" spellcheck="false">
+  <span id="find-count" class="find-count"></span>
+  <button id="find-prev" class="find-nav-btn" title="Anterior (⇧Enter)">↑</button>
+  <button id="find-next" class="find-nav-btn" title="Próxima (Enter)">↓</button>
+  <button id="find-close" class="find-nav-btn" title="Fechar (Esc)">×</button>
+  <div id="find-results" class="hidden"></div>
 </div>
 
 <!-- ══════════════════════════════════════
