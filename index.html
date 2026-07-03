@@ -52,6 +52,25 @@
         <svg class="btn-svg-icon" viewBox="0 0 512 512" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M500.3 443.7l-119.7-119.7c27.22-40.41 40.65-90.9 33.4-144.7C401.8 87.79 326.8 13.32 235.2 1.723C99.01-15.51-15.51 99.01 1.724 235.2c11.6 91.64 86.08 166.7 177.6 178.9c53.8 7.25 104.3-6.18 144.7-33.4l119.7 119.7c15.62 15.62 40.95 15.62 56.57 0C515.9 484.7 515.9 459.3 500.3 443.7zM79.1 208c0-70.58 57.42-128 128-128s128 57.42 128 128c0 70.58-57.42 128-128 128S79.1 278.6 79.1 208z"/></svg>
         <span class="btn-label">Buscar</span>
       </button>
+      <button class="btn-subtle hidden" id="btn-review" title="Modo revisão — original à esquerda, edição à direita (⌘⇧R)">
+        <svg class="btn-svg-icon" viewBox="0 0 512 512" width="14" height="14" fill="currentColor" aria-hidden="true"><rect x="16" y="96" width="200" height="320" rx="24"/><rect x="296" y="96" width="200" height="320" rx="24"/><rect x="246" y="80" width="20" height="352" rx="10"/></svg>
+        <span class="btn-label">Revisão</span>
+      </button>
+      <span id="review-controls" class="hidden">
+        <button class="btn-subtle" id="review-orient" title="Alternar lado a lado / empilhado">
+          <svg class="btn-svg-icon" viewBox="0 0 512 512" width="12" height="12" fill="currentColor" aria-hidden="true"><rect x="32" y="64" width="200" height="384" rx="16"/><rect x="280" y="64" width="200" height="384" rx="16"/></svg>
+          <span class="btn-label">Lado a lado</span>
+        </button>
+        <button class="btn-subtle" id="review-resync" title="Atualizar a referência (esquerda) para o texto atual">
+          <svg class="btn-svg-icon" viewBox="0 0 512 512" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M463.5 224H472c13.3 0 24-10.7 24-24V72c0-9.7-5.8-18.5-14.8-22.2s-19.3-1.7-26.2 5.2L413.4 96.6c-87.6-86.5-228.7-86.2-315.8 1c-87.5 87.5-87.5 229.3 0 316.8s229.3 87.5 316.8 0c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0c-62.5 62.5-163.8 62.5-226.3 0s-62.5-163.8 0-226.3c62.2-62.2 162.7-62.5 225.3-1L327 183c-6.9 6.9-8.9 17.2-5.2 26.2s12.5 14.8 22.2 14.8H463.5z"/></svg>
+          <span class="btn-label">Referência</span>
+        </button>
+        <button class="btn-subtle" id="review-archive" title="Arquivar esta revisão — guarda o antes/depois deste capítulo">
+          <svg class="btn-svg-icon" viewBox="0 0 512 512" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M32 96c0-17.7 14.3-32 32-32H448c17.7 0 32 14.3 32 32v32H32V96zM32 160H480V416c0 17.7-14.3 32-32 32H64c-17.7 0-32-14.3-32-32V160zM192 256c0 8.8 7.2 16 16 16h96c8.8 0 16-7.2 16-16s-7.2-16-16-16H208c-8.8 0-16 7.2-16 16z"/></svg>
+          <span class="btn-label">Arquivar</span>
+        </button>
+        <button class="btn-subtle" id="review-history-btn" title="Revisões arquivadas deste capítulo">Revisões (0)</button>
+      </span>
       <button class="btn-subtle hidden" id="btn-focus" title="Modo foco (⌘⇧F)">
         <svg class="btn-svg-icon" viewBox="0 -960 960 960" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M200-120q-33 0-56.5-23.5T120-200v-120q0-17 11.5-28.5T160-360q17 0 28.5 11.5T200-320v120h120q17 0 28.5 11.5T360-160q0 17-11.5 28.5T320-120H200Zm560 0H640q-17 0-28.5-11.5T600-160q0-17 11.5-28.5T640-200h120v-120q0-17 11.5-28.5T800-360q17 0 28.5 11.5T840-320v120q0 33-23.5 56.5T760-120ZM120-640v-120q0-33 23.5-56.5T200-840h120q17 0 28.5 11.5T360-800q0 17-11.5 28.5T320-760H200v120q0 17-11.5 28.5T160-600q-17 0-28.5-11.5T120-640Zm640 0v-120H640q-17 0-28.5-11.5T600-800q0-17 11.5-28.5T640-840h120q33 0 56.5 23.5T840-760v120q0 17-11.5 28.5T800-600q-17 0-28.5-11.5T760-640ZM338.5-338.5Q280-397 280-480t58.5-141.5Q397-680 480-680t141.5 58.5Q680-563 680-480t-58.5 141.5Q563-280 480-280t-141.5-58.5ZM565-395q35-35 35-85t-35-85q-35-35-85-35t-85 35q-35 35-35 85t35 85q35 35 85 35t85-35Zm-85-85Z"/></svg>
         <span class="btn-label">Foco</span>
@@ -125,7 +144,12 @@
           </div>
         </div>
 
-        <div class="editor-wrap">
+        <div class="editor-wrap" id="editor-wrap">
+          <div id="review-ref" class="hidden" aria-label="Texto original (somente leitura)">
+            <div class="review-ref-label">Original — somente leitura</div>
+            <div id="review-ref-body"></div>
+          </div>
+          <div id="review-divider" class="hidden" title="Arraste para redimensionar"></div>
           <textarea id="editor-textarea" placeholder="Comece a escrever esta cena…" spellcheck="true"></textarea>
         </div>
         <div class="editor-footer">
@@ -216,6 +240,11 @@
   <button id="find-close" class="find-nav-btn" title="Fechar (Esc)">×</button>
   <div id="find-results" class="hidden"></div>
 </div>
+
+<!-- ══════════════════════════════════════
+     HISTÓRICO DE REVISÕES (modo revisão)
+══════════════════════════════════════ -->
+<div id="review-history" class="hidden"></div>
 
 <!-- ══════════════════════════════════════
      MODAL — Novo projeto

@@ -31,6 +31,10 @@
   --sidebar-w: 252px;
   --notes-w:   288px;
   --header-h:  52px;
+
+  /* Universo — roxo, distinto do azul Word */
+  --uni:   #7b4ea0;
+  --unilt: #f3edf9;
 }
 
 /* ── Tema escuro (neutro/frio, sem o calor âmbar) ── */
@@ -48,6 +52,7 @@
   --a3lt:     #2e1810;
   --word-blue-soft: #1a2e50;
   --amber-lt: #1a2e50;
+  --unilt:    #2a2038;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1048,3 +1053,229 @@ mark {
 @media (max-width: 680px) {
   .sidebar-toggle { display: flex !important; }
 }
+
+/* ─────────────────────────────────────────
+   MODO REVISÃO — split original / edição
+───────────────────────────────────────── */
+#review-controls { display: inline-flex; gap: 6px; }
+
+#editor-wrap.review-on {
+  justify-content: stretch;
+  align-items: stretch;
+  padding: 14px 22px;
+  gap: 0;
+  overflow: hidden;
+}
+#editor-wrap.review-on.review-vertical { flex-direction: column; }
+
+#review-ref {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px dashed var(--border2);
+  border-radius: 3px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 16px;
+  line-height: 1.9;
+  color: var(--sub);
+}
+.review-ref-label {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  padding: 9px 24px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#review-ref-body {
+  padding: 18px 24px 28px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+#review-divider {
+  flex: 0 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: col-resize;
+}
+#review-divider::before {
+  content: '';
+  width: 3px; height: 46px;
+  background: var(--border2);
+  border-radius: 3px;
+  transition: background .12s;
+}
+#review-divider:hover::before { background: var(--word-blue); }
+.review-vertical #review-divider { cursor: row-resize; }
+.review-vertical #review-divider::before { width: 46px; height: 3px; }
+
+#editor-wrap.review-on #editor-textarea {
+  flex: 1 1 50%;
+  min-width: 0;
+  min-height: 0;
+  width: auto;
+  height: auto;
+}
+
+/* Histórico de revisões (dropdown) */
+#review-history {
+  position: fixed;
+  top: calc(var(--header-h) + 4px);
+  right: 16px;
+  z-index: 900;
+  width: 320px;
+  max-height: 60vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  padding: 6px;
+}
+.review-hist-head {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 8px 10px 6px;
+}
+.review-hist-empty { padding: 14px 12px; font-size: 12px; color: var(--muted); line-height: 1.5; text-align: center; }
+.review-hist-item {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  margin-bottom: 6px;
+  background: var(--bg);
+}
+.review-hist-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.review-hist-date  { font-size: 12px; font-weight: 600; color: var(--sub); }
+.review-hist-delta { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.review-hist-actions { display: flex; gap: 6px; }
+.review-hist-btn {
+  flex: 1;
+  font-size: 11px;
+  color: var(--sub);
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+  transition: all .12s;
+}
+.review-hist-btn:hover { border-color: var(--border2); color: var(--text); background: var(--bg); }
+
+/* Modo foco durante revisão: maximiza os dois painéis ocultando o chrome externo */
+body.review-focus-on .app-header,
+body.review-focus-on .sidebar,
+body.review-focus-on .notes-panel,
+body.review-focus-on .scene-header,
+body.review-focus-on .editor-toolbar,
+body.review-focus-on .editor-footer { display: none; }
+
+/* ─────────────────────────────────────────
+   UNIVERSO — árvore na sidebar (abaixo dos Atos)
+───────────────────────────────────────── */
+.utree { display: block; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.utree-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 16px 4px; cursor: pointer; user-select: none;
+  font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--uni);
+}
+.utree-header .utree-caret { font-size: 9px; transition: transform .14s; }
+.utree.collapsed .utree-header .utree-caret { transform: rotate(-90deg); }
+.utree.collapsed .utree-groups { display: none; }
+
+.utree-group { margin-bottom: 2px; }
+.utree-group-head {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 16px; cursor: pointer; user-select: none; transition: background .13s;
+}
+.utree-group-head:hover { background: var(--word-blue-soft); }
+.utree-group-head .ug-caret { font-size: 9px; color: var(--uni); transition: transform .14s; width: 9px; flex-shrink: 0; }
+.utree-group.collapsed .ug-caret { transform: rotate(-90deg); }
+.utree-group.collapsed .utree-items { display: none; }
+.utree-group-head .ug-icon { color: var(--uni); display: flex; width: 14px; flex-shrink: 0; }
+.utree-group-head .ug-label { flex: 1; font-size: 12.5px; font-weight: 600; color: var(--sub); }
+.utree-group-head .ug-count { font-size: 11px; color: var(--muted); }
+.utree-group-head .ug-add {
+  flex-shrink: 0; opacity: 0; pointer-events: none;
+  font-size: 13px; line-height: 1; padding: 2px 6px; border-radius: 6px;
+  color: var(--uni); background: transparent; border: none; cursor: pointer;
+  transition: opacity .12s, background .12s;
+}
+.utree-group-head:hover .ug-add { opacity: .8; pointer-events: auto; }
+.utree-group-head .ug-add:hover { opacity: 1; background: var(--unilt); }
+
+.utree-items { list-style: none; }
+.utree-item {
+  display: flex; align-items: center; gap: 7px;
+  padding: 5px 16px 5px 34px; cursor: pointer; user-select: none; transition: background .13s;
+}
+.utree-item:hover { background: var(--bg); }
+.utree-item.active { background: var(--unilt); box-shadow: inset 2px 0 0 var(--uni); }
+.utree-item .ui-thumb {
+  width: 18px; height: 18px; border-radius: 50%; object-fit: cover;
+  flex-shrink: 0; background: var(--border);
+}
+.utree-item .ui-dot {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--uni);
+  flex-shrink: 0; margin: 0 6px;
+}
+.utree-item .ui-name {
+  flex: 1; min-width: 0; font-size: 12.5px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.utree-item.empty .ui-name { color: var(--muted); font-style: italic; }
+
+.utree-empty-hint { padding: 4px 16px 4px 34px; font-size: 11px; color: var(--faint); font-style: italic; }
+
+/* Editor inline que abre logo abaixo do item */
+.utree-editor {
+  margin: 2px 16px 8px 28px; padding: 12px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,.1);
+}
+.utree-editor .ute-photo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.utree-editor .ute-photo {
+  width: 46px; height: 46px; border-radius: 50%; object-fit: cover;
+  background: var(--unilt); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; color: var(--uni);
+}
+.utree-editor .ute-photo-btn {
+  font-size: 11px; color: var(--uni); background: none; border: none;
+  cursor: pointer; padding: 2px 0; text-align: left; font-family: 'Inter', sans-serif;
+}
+.utree-editor label.ute-lbl {
+  display: block; font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--muted); margin: 8px 0 3px;
+}
+.utree-editor input, .utree-editor textarea {
+  width: 100%; box-sizing: border-box; font-family: 'Inter', sans-serif; font-size: 12.5px;
+  padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--bg); color: var(--text); resize: vertical; outline: none;
+}
+.utree-editor input:focus, .utree-editor textarea:focus { border-color: var(--uni); }
+.utree-editor textarea { min-height: 56px; line-height: 1.45; }
+.utree-editor .ute-actions { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.utree-editor .ute-save {
+  flex: 1; padding: 7px 10px; border: none; border-radius: 6px; cursor: pointer;
+  background: var(--uni); color: #fff; font-size: 12.5px; font-weight: 600; font-family: 'Inter', sans-serif;
+}
+.utree-editor .ute-save:hover { filter: brightness(1.08); }
+.utree-editor .ute-del {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--a3); font-size: 12.5px; font-family: 'Inter', sans-serif;
+}
+.utree-editor .ute-del:hover { background: rgba(192,57,43,.12); }

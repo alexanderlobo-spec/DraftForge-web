@@ -107,6 +107,7 @@ function exitFocus() {
 }
 
 function toggleFocusMode() {
+  if (Review._active) { Review._focusActive ? Review.exitFocus() : Review.enterFocus(); return; }
   focusMode ? exitFocus() : enterFocus();
 }
 
@@ -340,6 +341,473 @@ const Find = {
   }
 };
 
+// ── Modo revisão — divide o editor em dois painéis ──
+//   ESQUERDA (#review-ref)    → referência congelada, SOMENTE LEITURA.
+//   DIREITA  (#editor-textarea) → o editor de sempre, onde se escreve e salva.
+// Só a direita grava. A esquerda nunca escreve → zero risco de dados.
+const Review = {
+  _active:      false,
+  _focusActive: false,
+  _orientation: 'row',   // 'row' = lado a lado · 'column' = empilhado
+  _base:        '',      // texto congelado (o "antes" de uma revisão arquivada)
+
+  init() {
+    $('btn-review')?.addEventListener('click', () => this.toggle());
+    $('review-orient')?.addEventListener('click', () => this.toggleOrientation());
+    $('review-resync')?.addEventListener('click', () => this.resyncBase());
+    $('review-archive')?.addEventListener('click', () => this.archive());
+    $('review-history-btn')?.addEventListener('click', () => this.toggleHistory());
+    this._bindDivider();
+  },
+
+  toggle() { this._active ? this.exit() : this.enter(); },
+
+  enter() {
+    if (!currentProject || !currentScene) { showToast('Abra uma cena para revisar.', 'info'); return; }
+    if (focusMode) exitFocus();   // foco e revisão são mutuamente exclusivos
+
+    this._active = true;
+    this.freezeBase();
+
+    const wrap = $('editor-wrap');
+    wrap.classList.add('review-on');
+    wrap.classList.toggle('review-vertical', this._orientation === 'column');
+
+    $('review-ref').classList.remove('hidden');
+    $('review-divider').classList.remove('hidden');
+    $('review-controls').classList.remove('hidden');
+    $('btn-review').classList.add('active');
+    this._updateCount();
+
+    $('editor-textarea').style.zoom = 1;  // desliga o zoom do slider durante o split 50/50
+    $('editor-textarea').focus();
+  },
+
+  exit() {
+    if (!this._active) return;
+    if (this._focusActive) this.exitFocus();
+    this._active = false;
+
+    $('editor-wrap').classList.remove('review-on');
+    $('review-ref').classList.add('hidden');
+    $('review-divider').classList.add('hidden');
+    $('review-controls').classList.add('hidden');
+    $('review-history').classList.add('hidden');
+    $('btn-review').classList.remove('active');
+
+    this._resetSizes();
+    syncZoom($('slider-width').value);  // religa o zoom do slider ao voltar ao editor único
+  },
+
+  // Congela o texto atual da cena como referência (somente leitura, à esquerda).
+  freezeBase() {
+    this._base = currentScene ? (currentScene.text || '') : '';
+    const body = $('review-ref-body');
+    body.textContent    = this._base;
+    body.style.fontFamily = $('editor-textarea').style.fontFamily || '';
+    body.style.fontSize   = $('editor-textarea').style.fontSize   || '';
+  },
+
+  // ─── histórico de revisões persistido (scene.revisions[]) ───
+
+  _list() {
+    if (!currentScene) return [];
+    if (!Array.isArray(currentScene.revisions)) currentScene.revisions = [];
+    return currentScene.revisions;
+  },
+
+  // Arquiva o par antes/depois: antes = referência congelada, depois = texto atual.
+  archive() {
+    if (!this._active || !currentScene) return;
+    const before = this._base || '';
+    const after  = $('editor-textarea').value || '';
+    if (before === after) { showToast('Nada mudou desde a referência', 'info'); return; }
+
+    const list = this._list();
+    const id   = list.length ? Math.max(...list.map(r => r.id || 0)) + 1 : 1;
+    list.push({
+      id,
+      date:        new Date().toISOString(),
+      before, after,
+      beforeWords: countTextWords(before),
+      afterWords:  countTextWords(after)
+    });
+    scheduleSave();
+    this.freezeBase();          // a versão atual vira a nova referência
+    this._updateCount();
+    if (!$('review-history').classList.contains('hidden')) this._renderHistory();
+    showToast('✓ Revisão arquivada', 'info');
+  },
+
+  _updateCount() {
+    const btn = $('review-history-btn');
+    if (btn) btn.textContent = `Revisões (${this._list().length})`;
+  },
+
+  toggleHistory() {
+    const panel = $('review-history');
+    if (panel.classList.contains('hidden')) { this._renderHistory(); panel.classList.remove('hidden'); }
+    else panel.classList.add('hidden');
+  },
+
+  _fmtDate(iso) {
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch { return iso; }
+  },
+
+  _renderHistory() {
+    const panel = $('review-history');
+    const list  = this._list().slice().reverse();   // mais recentes primeiro
+    if (!list.length) {
+      panel.innerHTML = '<div class="review-hist-empty">Nenhuma revisão arquivada neste capítulo.<br>Use "Arquivar" para guardar o antes/depois.</div>';
+      return;
+    }
+    panel.innerHTML = '<div class="review-hist-head">Revisões arquivadas</div>';
+    list.forEach(rev => {
+      const delta = rev.afterWords - rev.beforeWords;
+      const sign  = delta > 0 ? '+' : '';
+      const row = document.createElement('div');
+      row.className = 'review-hist-item';
+      row.innerHTML = `
+        <div class="review-hist-meta">
+          <span class="review-hist-date">${this._fmtDate(rev.date)}</span>
+          <span class="review-hist-delta">${rev.beforeWords}→${rev.afterWords} pal. (${sign}${delta})</span>
+        </div>
+        <div class="review-hist-actions">
+          <button class="review-hist-btn" data-act="view" data-id="${rev.id}">Ver antes</button>
+          <button class="review-hist-btn" data-act="restore" data-id="${rev.id}">Restaurar antes</button>
+        </div>`;
+      row.querySelector('[data-act="view"]').addEventListener('click',    () => this.viewRevision(rev.id));
+      row.querySelector('[data-act="restore"]').addEventListener('click', () => this.restoreRevision(rev.id));
+      panel.appendChild(row);
+    });
+  },
+
+  viewRevision(id) {
+    const rev = this._list().find(r => r.id === id);
+    if (!rev) return;
+    $('review-ref-body').textContent = rev.before || '';
+    showToast('Mostrando o "antes" desta revisão à esquerda', 'info');
+  },
+
+  restoreRevision(id) {
+    const rev = this._list().find(r => r.id === id);
+    if (!rev) return;
+    if (!confirm('Substituir o texto atual (direita) pelo "antes" desta revisão?\n\nO texto atual será perdido se não estiver arquivado.')) return;
+    $('editor-textarea').value = rev.before || '';
+    updateWordCount();
+    scheduleSave();
+    this.freezeBase();
+    showToast('Texto restaurado', 'info');
+  },
+
+  // Reassinala a referência ao texto atual (perde o original congelado).
+  resyncBase() {
+    if (!this._active) return;
+    if (!confirm('Atualizar a referência (esquerda) para o texto atual?\n\nA versão original congelada será substituída.')) return;
+    this.freezeBase();
+    showToast('Referência atualizada', 'info');
+  },
+
+  toggleOrientation() {
+    this._orientation = this._orientation === 'row' ? 'column' : 'row';
+    $('editor-wrap').classList.toggle('review-vertical', this._orientation === 'column');
+    $('review-orient').querySelector('.btn-label').textContent =
+      this._orientation === 'row' ? 'Lado a lado' : 'Empilhado';
+    this._resetSizes();
+  },
+
+  _resetSizes() {
+    const ref = $('review-ref');
+    if (ref) ref.style.flex = '';
+  },
+
+  _bindDivider() {
+    const div = $('review-divider');
+    if (!div) return;
+    div.addEventListener('mousedown', e => {
+      if (!this._active) return;
+      e.preventDefault();
+      const wrap     = $('editor-wrap');
+      const ref      = $('review-ref');
+      const vertical = this._orientation === 'column';
+      const rect     = wrap.getBoundingClientRect();
+      const move = ev => {
+        let frac = vertical
+          ? (ev.clientY - rect.top)  / rect.height
+          : (ev.clientX - rect.left) / rect.width;
+        frac = Math.max(0.2, Math.min(0.8, frac));
+        ref.style.flex = `0 0 ${(frac * 100).toFixed(1)}%`;
+      };
+      const up = () => {
+        document.removeEventListener('mousemove', move);
+        document.removeEventListener('mouseup',   up);
+      };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup',   up);
+    });
+  },
+
+  // Trocou de cena com o modo ativo → a referência acompanha a nova cena.
+  onSceneChange() {
+    if (!this._active) return;
+    this.freezeBase();
+    this._updateCount();
+    $('review-history').classList.add('hidden');
+  },
+
+  // ─── Foco durante revisão ───
+  // Não usa o #focus-overlay; apenas esconde o chrome externo para maximizar
+  // os dois painéis de revisão. focusMode permanece false, portanto o
+  // autosave continua lendo de #editor-textarea normalmente.
+
+  enterFocus() {
+    if (!this._active) return;
+    this._focusActive = true;
+    document.body.classList.add('review-focus-on');
+    $('btn-focus').classList.add('active');
+    showToast('ESC para sair do foco', 'info');
+  },
+
+  exitFocus() {
+    this._focusActive = false;
+    document.body.classList.remove('review-focus-on');
+    $('btn-focus').classList.remove('active');
+  }
+};
+
+// ── Universo — Personagens, Locais e Notas na sidebar, abaixo dos Atos ──
+// Cada item abre um editor inline logo abaixo dele ao ser clicado.
+const ICON_PERSONAGEM = '<svg viewBox="0 0 448 512" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M224 256A128 128 0 1 0 224 0a128 128 0 1 0 0 256zm-45.7 48C79.8 304 0 383.8 0 482.3C0 498.7 13.3 512 29.7 512H418.3c16.4 0 29.7-13.3 29.7-29.7C448 383.8 368.2 304 269.7 304H178.3z"/></svg>';
+const ICON_LOCAL      = '<svg viewBox="0 0 384 512" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M215.7 499.2C267 435 384 279.4 384 192C384 86 298 0 192 0S0 86 0 192c0 87.4 117 243 168.3 307.2c12.3 15.3 35.1 15.3 47.4 0zM192 128a64 64 0 1 1 0 128 64 64 0 1 1 0-128z"/></svg>';
+const ICON_NOTA       = '<svg viewBox="0 0 384 512" width="12" height="12" fill="currentColor" aria-hidden="true"><path d="M64 0C28.7 0 0 28.7 0 64V448c0 35.3 28.7 64 64 64H320c35.3 0 64-28.7 64-64V160H256c-17.7 0-32-14.3-32-32V0H64zM256 0V128H384L256 0zM96 256H288c8.8 0 16 7.2 16 16s-7.2 16-16 16H96c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H288c8.8 0 16 7.2 16 16s-7.2 16-16 16H96c-8.8 0-16-7.2-16-16s7.2-16 16-16zm0 64H288c8.8 0 16 7.2 16 16s-7.2 16-16 16H96c-8.8 0-16-7.2-16-16s7.2-16 16-16z"/></svg>';
+
+const UniverseTree = {
+  GROUPS: [
+    { key: 'personagem', label: 'Personagens', icon: ICON_PERSONAGEM },
+    { key: 'local',      label: 'Locais',      icon: ICON_LOCAL },
+    { key: 'nota',       label: 'Notas',       icon: ICON_NOTA }
+  ],
+
+  _collapsed:   false,                                   // seção Universo inteira
+  _openGroups:  { personagem: true, local: true, nota: true },
+  _editingId:   null,                                    // id do item em edição inline
+  _newCat:      null,                                     // cat quando adicionando novo item
+  _pendingPhoto: null,                                    // data URL temporária (foto de personagem)
+
+  _list() {
+    if (!currentProject) return [];
+    if (!Array.isArray(currentProject.universe)) currentProject.universe = [];
+    return currentProject.universe;
+  },
+
+  // Reconstrói só a seção Universo, sem tocar na lista de cenas acima.
+  render() {
+    const container = $('scene-list');
+    if (!container) return;
+    container.querySelector('.utree')?.remove();
+    this.renderInto(container);
+  },
+
+  renderInto(container) {
+    if (!currentProject) return;
+
+    const root = document.createElement('div');
+    root.className = 'utree' + (this._collapsed ? ' collapsed' : '');
+
+    const header = document.createElement('div');
+    header.className = 'utree-header';
+    header.innerHTML = `<span class="utree-caret">▾</span> Universo`;
+    header.title = 'Personagens, locais e notas do seu universo';
+    header.addEventListener('click', () => { this._collapsed = !this._collapsed; this.render(); });
+    root.appendChild(header);
+
+    const groups = document.createElement('div');
+    groups.className = 'utree-groups';
+    this.GROUPS.forEach(g => groups.appendChild(this._renderGroup(g)));
+    root.appendChild(groups);
+
+    container.appendChild(root);
+  },
+
+  _renderGroup(g) {
+    const key   = g.key;
+    const open  = this._openGroups[key] !== false;
+    const items = this._list().filter(e => e.cat === key)
+      .sort((a, b) => (a.name || '').localeCompare(b.name || '', 'pt'));
+
+    const grp = document.createElement('div');
+    grp.className = 'utree-group' + (open ? '' : ' collapsed');
+
+    const head = document.createElement('div');
+    head.className = 'utree-group-head';
+    head.innerHTML = `
+      <span class="ug-caret">▾</span>
+      <span class="ug-icon">${g.icon}</span>
+      <span class="ug-label">${g.label}</span>
+      ${items.length ? `<span class="ug-count">${items.length}</span>` : ''}
+      <button class="ug-add" type="button" title="Adicionar ${g.label.toLowerCase()}">+</button>`;
+    head.addEventListener('click', e => {
+      if (e.target.closest('.ug-add')) return;
+      this._openGroups[key] = !open;
+      this.render();
+    });
+    head.querySelector('.ug-add').addEventListener('click', e => {
+      e.stopPropagation();
+      this._openGroups[key] = true;
+      this._editingId = null;
+      this._newCat = key;
+      this._pendingPhoto = null;
+      this.render();
+    });
+    grp.appendChild(head);
+
+    const list = document.createElement('div');
+    list.className = 'utree-items';
+
+    // Editor de novo item (fica no topo do grupo)
+    if (this._newCat === key) list.appendChild(this._renderEditor('new', key));
+
+    if (!items.length && this._newCat !== key) {
+      const hint = document.createElement('div');
+      hint.className = 'utree-empty-hint';
+      hint.textContent = 'Vazio — use + para adicionar';
+      list.appendChild(hint);
+    }
+
+    items.forEach(entry => {
+      const row = document.createElement('div');
+      const isActive = this._editingId === entry.id;
+      row.className = 'utree-item' + (isActive ? ' active' : '') + (entry.name ? '' : ' empty');
+
+      const isChar = entry.cat === 'personagem';
+      const lead = isChar && entry.photo
+        ? `<img class="ui-thumb" src="${entry.photo}" alt="">`
+        : `<span class="ui-dot"></span>`;
+      row.innerHTML = `${lead}<span class="ui-name">${escHtml(entry.name || 'Sem nome')}</span>`;
+      row.addEventListener('click', () => {
+        this._newCat = null;
+        this._pendingPhoto = null;
+        this._editingId = isActive ? null : entry.id;   // toggle
+        this.render();
+      });
+      list.appendChild(row);
+
+      if (isActive) list.appendChild(this._renderEditor(entry.id, key));
+    });
+
+    grp.appendChild(list);
+    return grp;
+  },
+
+  // ─────────────────────── Editor inline ───────────────────────
+
+  _renderEditor(id, cat) {
+    const isNew  = id === 'new';
+    const entry  = isNew
+      ? { name: '', summary: '', body: '', photo: '', cat }
+      : this._list().find(e => e.id === id) || { name: '', summary: '', body: '', photo: '', cat };
+    const isChar = entry.cat === 'personagem';
+
+    const wrap = document.createElement('div');
+    wrap.className = 'utree-editor';
+    wrap.addEventListener('click', e => e.stopPropagation());
+
+    let html = '';
+
+    if (isChar) {
+      const photo = this._pendingPhoto || entry.photo || '';
+      html += `
+        <div class="ute-photo-row">
+          <div class="ute-photo">${photo ? `<img class="ui-thumb" style="width:46px;height:46px" src="${photo}" alt="">` : ICON_PERSONAGEM}</div>
+          <div>
+            <button class="ute-photo-btn" type="button" data-act="photo">${photo ? 'Trocar foto' : '+ Adicionar foto'}</button>
+            <input type="file" data-photo accept="image/*" hidden>
+          </div>
+        </div>`;
+    }
+
+    html += `
+      <label class="ute-lbl">Nome</label>
+      <input data-f="name" type="text" value="${escHtml(entry.name || '')}" placeholder="Nome">
+      <label class="ute-lbl">Resumo</label>
+      <input data-f="summary" type="text" value="${escHtml(entry.summary || '')}" placeholder="Uma linha">
+      <label class="ute-lbl">Detalhes</label>
+      <textarea data-f="body" placeholder="Características, história, notas…">${escHtml(entry.body || '')}</textarea>
+      <div class="ute-actions">
+        <button class="ute-save" type="button" data-act="save">${isNew ? 'Adicionar' : 'Salvar'}</button>
+        ${isNew ? '' : '<button class="ute-del" type="button" data-act="del">Apagar</button>'}
+      </div>`;
+
+    wrap.innerHTML = html;
+
+    if (isChar) {
+      const fileInput = wrap.querySelector('[data-photo]');
+      wrap.querySelector('[data-act="photo"]')?.addEventListener('click', () => fileInput.click());
+      fileInput?.addEventListener('change', e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          this._pendingPhoto = ev.target.result;
+          const box = wrap.querySelector('.ute-photo');
+          if (box) box.innerHTML = `<img class="ui-thumb" style="width:46px;height:46px" src="${this._pendingPhoto}" alt="">`;
+          const btn = wrap.querySelector('[data-act="photo"]');
+          if (btn) btn.textContent = 'Trocar foto';
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    wrap.querySelector('[data-act="save"]').addEventListener('click', () => this._save(isNew, entry, wrap));
+    wrap.querySelector('[data-act="del"]')?.addEventListener('click', () => this._del(entry.id));
+
+    setTimeout(() => wrap.querySelector('[data-f="name"]')?.focus(), 30);
+    return wrap;
+  },
+
+  _save(isNew, entry, wrap) {
+    const val = sel => wrap.querySelector(sel)?.value.trim() || '';
+    const name = val('[data-f="name"]');
+    if (!name) { wrap.querySelector('[data-f="name"]')?.focus(); return; }
+    const summary = val('[data-f="summary"]');
+    const body    = val('[data-f="body"]');
+    const isChar  = entry.cat === 'personagem';
+
+    const list = this._list();
+    if (isNew) {
+      const id = list.length ? Math.max(...list.map(e => e.id || 0)) + 1 : 1;
+      const rec = { id, cat: entry.cat, name, summary, body };
+      if (isChar) rec.photo = this._pendingPhoto || '';
+      list.push(rec);
+      this._editingId = id;
+    } else {
+      entry.name = name; entry.summary = summary; entry.body = body;
+      if (isChar && this._pendingPhoto) entry.photo = this._pendingPhoto;
+    }
+
+    this._newCat = null;
+    this._pendingPhoto = null;
+    scheduleSave();
+    showToast('Universo atualizado', 'info');
+    this.render();
+  },
+
+  _del(id) {
+    const list = this._list();
+    const i = list.findIndex(e => e.id === id);
+    if (i < 0) return;
+    if (!confirm(`Apagar "${list[i].name || 'sem nome'}" do universo?`)) return;
+    list.splice(i, 1);
+    this._editingId = null;
+    this._pendingPhoto = null;
+    scheduleSave();
+    this.render();
+  }
+};
+
 // ── Projetos ──
 async function loadAllProjects() {
   $('project-list').innerHTML = '<div class="list-placeholder">Carregando…</div>';
@@ -409,10 +877,12 @@ async function openProject(slug) {
   $('btn-close-project').classList.remove('hidden');
   $('btn-focus').classList.remove('hidden');
   $('btn-find').classList.remove('hidden');
+  $('btn-review').classList.remove('hidden');
 }
 
 async function closeCurrentProject() {
   exitFocus();
+  Review.exit();
   Find.close();
 
   if (currentScene) {
@@ -428,6 +898,7 @@ async function closeCurrentProject() {
   $('btn-close-project').classList.add('hidden');
   $('btn-focus').classList.add('hidden');
   $('btn-find').classList.add('hidden');
+  $('btn-review').classList.add('hidden');
   showSidebarState('projects');
   showEditorState('empty');
 }
@@ -439,37 +910,38 @@ function renderSceneList() {
 
   if (scenes.length === 0) {
     list.innerHTML = '<div class="list-placeholder">Nenhuma cena ainda.</div>';
-    return;
+  } else {
+    const actNames = { 1: 'ATO 1 — CONSTRUÇÃO', 2: 'ATO 2 — CONFRONTO', 3: 'ATO 3 — RESOLUÇÃO' };
+    const byAct = { 1: [], 2: [], 3: [] };
+    scenes.forEach(s => { (byAct[s.act] || byAct[1]).push(s); });
+
+    let html = '';
+    [1, 2, 3].forEach(act => {
+      if (!byAct[act].length) return;
+      html += `<div class="act-label act-${act}-color">${actNames[act]}</div>`;
+      byAct[act].forEach(s => {
+        const statusLabel = { done: '✓ Escrita', notes: 'Notas', todo: 'Rascunho' }[s.status] || 'Rascunho';
+        const wc = countTextWords(s.text);
+        const isActive = currentScene?.id === s.id ? ' active' : '';
+        html += `
+          <div class="scene-item act-${act}-border${isActive}" data-id="${s.id}">
+            <div class="scene-item-title">${s.title}</div>
+            <div class="scene-item-meta">${statusLabel} · ${wc.toLocaleString('pt-BR')}p</div>
+          </div>`;
+      });
+    });
+
+    list.innerHTML = html;
+    list.querySelectorAll('.scene-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const id = parseInt(el.dataset.id);
+        const scene = currentProject.scenes.find(s => s.id === id);
+        if (scene) openScene(scene);
+      });
+    });
   }
 
-  const actNames = { 1: 'ATO 1 — CONSTRUÇÃO', 2: 'ATO 2 — CONFRONTO', 3: 'ATO 3 — RESOLUÇÃO' };
-  const byAct = { 1: [], 2: [], 3: [] };
-  scenes.forEach(s => { (byAct[s.act] || byAct[1]).push(s); });
-
-  let html = '';
-  [1, 2, 3].forEach(act => {
-    if (!byAct[act].length) return;
-    html += `<div class="act-label act-${act}-color">${actNames[act]}</div>`;
-    byAct[act].forEach(s => {
-      const statusLabel = { done: '✓ Escrita', notes: 'Notas', todo: 'Rascunho' }[s.status] || 'Rascunho';
-      const wc = countTextWords(s.text);
-      const isActive = currentScene?.id === s.id ? ' active' : '';
-      html += `
-        <div class="scene-item act-${act}-border${isActive}" data-id="${s.id}">
-          <div class="scene-item-title">${s.title}</div>
-          <div class="scene-item-meta">${statusLabel} · ${wc.toLocaleString('pt-BR')}p</div>
-        </div>`;
-    });
-  });
-
-  list.innerHTML = html;
-  list.querySelectorAll('.scene-item').forEach(el => {
-    el.addEventListener('click', () => {
-      const id = parseInt(el.dataset.id);
-      const scene = currentProject.scenes.find(s => s.id === id);
-      if (scene) openScene(scene);
-    });
-  });
+  if (typeof UniverseTree !== 'undefined') UniverseTree.renderInto(list);
 }
 
 async function openScene(scene) {
@@ -503,6 +975,7 @@ async function openScene(scene) {
 
   showEditorState('scene');
   if (!focusMode) $('editor-textarea').focus();
+  if (typeof Review !== 'undefined') Review.onSceneChange();
 }
 
 // ── Auto-save ──
@@ -527,17 +1000,19 @@ function scheduleSave() {
 }
 
 async function doSave(silent = false) {
-  if (!currentProject || !currentScene) return;
+  if (!currentProject) return;
   if (!silent) setSaveStatus('saving');
 
-  currentScene.text     = $('editor-textarea').value;
-  currentScene.status   = $('notes-status').value;
-  currentScene.nota     = $('notes-nota').value;
-  currentScene.loc      = $('notes-loc').value;
-  currentScene.pov      = $('notes-pov').value;
-  currentScene.tom      = $('notes-tom').value;
-  currentScene.objetivo = $('notes-objetivo').value;
-  currentScene.gancho   = $('notes-gancho').value;
+  if (currentScene) {
+    currentScene.text     = $('editor-textarea').value;
+    currentScene.status   = $('notes-status').value;
+    currentScene.nota     = $('notes-nota').value;
+    currentScene.loc      = $('notes-loc').value;
+    currentScene.pov      = $('notes-pov').value;
+    currentScene.tom      = $('notes-tom').value;
+    currentScene.objetivo = $('notes-objetivo').value;
+    currentScene.gancho   = $('notes-gancho').value;
+  }
 
   try {
     await saveProjectJson(currentProject.meta.slug, currentProject);
@@ -649,10 +1124,12 @@ function showToast(msg, type = 'info') {
 document.addEventListener('DOMContentLoaded', () => {
 
   buildFontControls();
+  Review.init();
 
   $('btn-login').addEventListener('click', login);
   $('btn-logout').addEventListener('click', () => {
     exitFocus();
+    Review.exit();
     Find.close();
     logout();
     currentProject = null;
@@ -662,6 +1139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     $('btn-close-project').classList.add('hidden');
     $('btn-focus').classList.add('hidden');
     $('btn-find').classList.add('hidden');
+    $('btn-review').classList.add('hidden');
     showLoginScreen();
   });
 
@@ -788,6 +1266,14 @@ document.addEventListener('DOMContentLoaded', () => {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && (e.key === 'f' || e.key === 'F') && currentProject) {
       e.preventDefault();
       Find.toggle();
+    }
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'R' || e.key === 'r') && currentScene) {
+      e.preventDefault();
+      Review.toggle();
+    }
+    if (e.key === 'Escape' && Review._focusActive) {
+      e.preventDefault();
+      Review.exitFocus();
     }
   });
 
