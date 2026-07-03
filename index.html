@@ -48,7 +48,7 @@
       <span id="header-words"></span>
       <button class="btn-subtle hidden" id="btn-save-now" title="Salvar (⌘S)">Salvar</button>
       <button class="btn-subtle hidden" id="btn-close-project" title="Fechar projeto">Fechar</button>
-      <button class="btn-subtle hidden" id="btn-focus" title="Modo foco (F11)">Foco</button>
+      <button class="btn-subtle hidden" id="btn-focus" title="Modo foco (⌘⇧F)">Foco</button>
       <button class="btn-subtle" id="btn-theme" title="Alternar tema">🌙</button>
       <button class="btn-subtle" id="btn-logout">Sair</button>
       <div class="user-badge" id="user-initial">?</div>
@@ -118,8 +118,8 @@
             <option value="Verdana, sans-serif">Verdana</option>
           </select>
           <span class="toolbar-sep"></span>
-          <label class="toolbar-label" for="slider-width">Largura</label>
-          <input type="range" id="slider-width" min="480" max="960" step="20" value="700" class="toolbar-slider" title="Largura da área de escrita">
+          <label class="toolbar-label" for="slider-width">Zoom</label>
+          <input type="range" id="slider-width" min="350" max="2100" step="20" value="700" class="toolbar-slider" title="Zoom da página de escrita (não move as linhas)">
         </div>
 
         <div class="editor-wrap">
@@ -182,6 +182,19 @@
 
   </div><!-- /app-body -->
 </div><!-- /app -->
+
+<!-- ══════════════════════════════════════
+     MODO FOCO — overlay em tela cheia
+══════════════════════════════════════ -->
+<div id="focus-overlay" class="hidden">
+  <div id="focus-scene-title"></div>
+  <textarea id="focus-editor" spellcheck="true"></textarea>
+  <div id="focus-footer">
+    <span id="focus-wordcount"></span>
+  </div>
+  <div id="focus-hint">ESC para sair do modo foco</div>
+  <button id="btn-exit-focus" title="Sair do modo foco (Esc)">×</button>
+</div>
 
 <!-- ══════════════════════════════════════
      MODAL — Novo projeto

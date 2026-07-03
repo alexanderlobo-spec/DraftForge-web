@@ -57,11 +57,52 @@ function applyTheme(dark) {
   if (btn) btn.textContent = dark ? '☀️' : '🌙';
 }
 
-// ── Modo foco ──
+// ── Modo foco — overlay em tela cheia ──
+let focusHintTimer = null;
+
+function enterFocus() {
+  if (!currentScene) return;
+  focusMode = true;
+
+  $('focus-scene-title').textContent = currentScene.title || '';
+  $('focus-editor').value = $('editor-textarea').value;
+  $('focus-editor').style.fontFamily = $('editor-textarea').style.fontFamily || '';
+  syncZoom($('slider-width').value);
+
+  $('focus-overlay').classList.remove('hidden');
+  updateFocusWordCount();
+  showFocusHint();
+  $('focus-editor').focus();
+
+  $('btn-focus').textContent = 'Sair foco';
+}
+
+function exitFocus() {
+  if (!focusMode) return;
+  focusMode = false;
+
+  $('editor-textarea').value = $('focus-editor').value;
+  updateWordCount();
+  scheduleSave();
+
+  $('focus-overlay').classList.add('hidden');
+  $('btn-focus').textContent = 'Foco';
+}
+
 function toggleFocusMode() {
-  focusMode = !focusMode;
-  $('app').classList.toggle('focus-mode', focusMode);
-  $('btn-focus').textContent = focusMode ? 'Sair foco' : 'Foco';
+  focusMode ? exitFocus() : enterFocus();
+}
+
+function updateFocusWordCount() {
+  const words = countTextWords($('focus-editor').value);
+  $('focus-wordcount').textContent = `${words.toLocaleString('pt-BR')} palavras nesta cena`;
+}
+
+function showFocusHint() {
+  const hint = $('focus-hint');
+  hint.classList.add('show');
+  clearTimeout(focusHintTimer);
+  focusHintTimer = setTimeout(() => hint.classList.remove('show'), 3000);
 }
 
 // ── Fonte do editor ──
@@ -70,10 +111,15 @@ function applyEditorFont(font) {
   localStorage.setItem('df_editor_font', font);
 }
 
-// ── Largura do editor ──
-function applyEditorWidth(w) {
-  document.documentElement.style.setProperty('--editor-max-w', w + 'px');
-  localStorage.setItem('df_editor_width', String(w));
+// ── Zoom da área de escrita (a página tem largura fixa; o slider só amplia/reduz visualmente, sem mover onde o texto quebra) ──
+const EDITOR_BASE_W = 700;
+
+function syncZoom(value) {
+  const ratio = (value / EDITOR_BASE_W).toFixed(3);
+  $('editor-textarea').style.zoom = ratio;
+  const focusEditor = $('focus-editor');
+  if (focusEditor) focusEditor.style.zoom = ratio;
+  localStorage.setItem('df_editor_width', String(value));
 }
 
 // ── Busca ──
@@ -238,7 +284,7 @@ async function openProject(slug) {
 }
 
 async function closeCurrentProject() {
-  if (focusMode) toggleFocusMode();
+  exitFocus();
   if (searchOpen) closeSearch();
 
   if (currentScene) {
@@ -475,7 +521,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   $('btn-login').addEventListener('click', login);
   $('btn-logout').addEventListener('click', () => {
-    if (focusMode) toggleFocusMode();
+    exitFocus();
     if (searchOpen) closeSearch();
     logout();
     currentProject = null;
@@ -557,23 +603,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fonte do editor
   $('select-font').addEventListener('change', () => applyEditorFont($('select-font').value));
 
-  // Largura do editor
-  $('slider-width').addEventListener('input', () => applyEditorWidth($('slider-width').value));
+  // Zoom da área de escrita
+  $('slider-width').addEventListener('input', () => syncZoom($('slider-width').value));
 
   // Busca
   $('btn-search-toggle').addEventListener('click', () => searchOpen ? closeSearch() : openSearch());
   $('search-input').addEventListener('input',   () => runSearch($('search-input').value));
   $('search-input').addEventListener('keydown', e => { if (e.key === 'Escape') closeSearch(); });
 
-  // Inicializar fonte e largura do localStorage
-  const savedFont  = localStorage.getItem('df_editor_font');
-  const savedWidth = localStorage.getItem('df_editor_width') || '700';
+  // Inicializar fonte e zoom do localStorage
+  const savedFont = localStorage.getItem('df_editor_font');
+  const savedZoom = localStorage.getItem('df_editor_width') || '700';
   if (savedFont) {
     applyEditorFont(savedFont);
     $('select-font').value = savedFont;
   }
-  applyEditorWidth(savedWidth);
-  $('slider-width').value = savedWidth;
+  $('slider-width').value = savedZoom;
+  syncZoom(savedZoom);
 
   // Atalhos de teclado
   document.addEventListener('keydown', e => {
@@ -581,12 +627,24 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault();
       doSave(false);
     }
-    if (e.key === 'Escape' && focusMode) toggleFocusMode();
-    if (e.key === 'F11' && currentScene) {
+    if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'F' || e.key === 'f') && currentScene) {
       e.preventDefault();
       toggleFocusMode();
     }
   });
+
+  // Modo foco: Esc para sair, digitação sincroniza de volta com o editor principal
+  $('focus-editor').addEventListener('keydown', e => {
+    if (e.key === 'Escape') { e.preventDefault(); exitFocus(); }
+  });
+  $('focus-editor').addEventListener('input', () => {
+    updateFocusWordCount();
+    $('editor-textarea').value = $('focus-editor').value;
+    updateWordCount();
+    scheduleSave();
+  });
+  $('focus-overlay').addEventListener('mousemove', showFocusHint);
+  $('btn-exit-focus').addEventListener('click', exitFocus);
 
   // Salva ao fechar aba/janela
   window.addEventListener('beforeunload', e => {
