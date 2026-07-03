@@ -1,49 +1,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=Inter:wght@400;500;600&display=swap');
 
 :root {
-  --bg:       #f5f4f0;
+  /* ── Paleta Word (azul + cinzas neutros) ── */
+  --word-blue:      #185abd;
+  --word-blue-hi:   #2b6cc4;
+  --word-blue-soft: #d7e7fb;
+
+  --bg:       #e8eaed;   /* cinza canvas do Word */
   --surface:  #ffffff;
-  --border:   #dddbd4;
-  --border2:  #c8c6bf;
-  --text:     #1a1916;
-  --sub:      #4a4840;
-  --muted:    #8a8880;
-  --faint:    #b8b6b0;
+  --border:   #e1dfdd;
+  --border2:  #d1cfcd;
+  --text:     #262626;
+  --sub:      #444444;
+  --muted:    #616161;
+  --faint:    #8a8886;
+
+  /* Ato (cores semânticas — não mudam) */
   --a1:       #2e6b45;
   --a1lt:     #e6f4ec;
   --a2:       #1e4d82;
   --a2lt:     #e4edf8;
   --a3:       #7d2b1a;
   --a3lt:     #faeae6;
-  --gold:     #7a5e22;
-  --amber:    #b8860b;
-  --amber-lt: #fef8e4;
+
+  /* Acento principal → azul Word (era âmbar) */
+  --gold:     var(--word-blue);
+  --amber:    var(--word-blue);
+  --amber-lt: var(--word-blue-soft);
+
   --sidebar-w: 252px;
   --notes-w:   288px;
   --header-h:  52px;
 }
 
+/* ── Tema escuro (neutro/frio, sem o calor âmbar) ── */
 [data-theme="dark"] {
-  --bg:       #1c1b18;
-  --surface:  #252420;
-  --border:   #3a3830;
-  --border2:  #4e4c44;
-  --text:     #f0ede8;
-  --sub:      #c0bdb6;
-  --muted:    #8a8880;
-  --faint:    #5a5850;
+  --bg:       #1e2124;
+  --surface:  #26292d;
+  --border:   #3a3d41;
+  --border2:  #4a4d52;
+  --text:     #e8e9ea;
+  --sub:      #b0b3b8;
+  --muted:    #8a8d92;
+  --faint:    #5a5d62;
   --a1lt:     #1a2e22;
-  --a2lt:     #192440;
+  --a2lt:     #192240;
   --a3lt:     #2e1810;
-  --gold:     #c8a040;
-  --amber-lt: #28200c;
+  --word-blue-soft: #1a2e50;
+  --amber-lt: #1a2e50;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 html, body {
   height: 100%;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
@@ -65,18 +76,18 @@ html, body {
 .login-card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 8px;
   padding: 52px 44px;
   text-align: center;
   width: 360px;
-  box-shadow: 0 4px 24px rgba(0,0,0,.06);
+  box-shadow: 0 4px 24px rgba(0,0,0,.1);
 }
 
 .login-brand {
   font-family: 'Playfair Display', serif;
   font-size: 30px;
   font-weight: 700;
-  color: var(--amber);
+  color: var(--word-blue);
   margin-bottom: 10px;
 }
 
@@ -97,25 +108,26 @@ html, body {
 }
 
 /* ─────────────────────────────────────────
-   HEADER
+   HEADER — barra de título azul Word
 ───────────────────────────────────────── */
 .app-header {
   height: var(--header-h);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--word-blue);
+  border-bottom: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,.25);
   display: flex;
   align-items: center;
-  padding: 0 20px;
-  gap: 16px;
+  padding: 0 16px;
+  gap: 12px;
   flex-shrink: 0;
   z-index: 10;
 }
 
 .header-brand {
   font-family: 'Playfair Display', serif;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
-  color: var(--amber);
+  color: #ffffff;
   white-space: nowrap;
   flex-shrink: 0;
 }
@@ -125,7 +137,7 @@ html, body {
   text-align: center;
   font-size: 13px;
   font-weight: 500;
-  color: var(--sub);
+  color: rgba(255,255,255,.9);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -134,24 +146,25 @@ html, body {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
 #header-words {
   font-size: 12px;
-  color: var(--muted);
+  color: rgba(255,255,255,.75);
 }
 
-.save-indicator          { font-size: 12px; color: var(--muted); }
-.save-indicator.saving   { color: #b45309; }
-.save-indicator.saved    { color: var(--a1); }
-.save-indicator.error    { color: var(--a3); cursor: pointer; }
+.save-indicator          { font-size: 12px; color: rgba(255,255,255,.75); }
+.save-indicator.saving   { color: #ffe082; }
+.save-indicator.saved    { color: #a5d6a7; }
+.save-indicator.error    { color: #ef9a9a; cursor: pointer; }
 
 .user-badge {
   width: 28px; height: 28px;
   border-radius: 50%;
-  background: var(--amber);
+  background: rgba(255,255,255,.22);
+  border: 1.5px solid rgba(255,255,255,.45);
   color: #fff;
   font-size: 12px;
   font-weight: 600;
@@ -231,12 +244,12 @@ html, body {
 .project-item {
   padding: 10px 16px;
   margin: 1px 8px;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
   transition: background .12s;
 }
 
-.project-item:hover { background: var(--bg); }
+.project-item:hover { background: var(--word-blue-soft); }
 
 .project-item-name {
   font-size: 13px;
@@ -269,11 +282,15 @@ html, body {
   cursor: pointer;
   transition: background .12s;
 }
-.scene-item:hover { background: var(--bg); }
+.scene-item:hover { background: var(--word-blue-soft); }
 
-.scene-item.active.act-1-border { border-color: var(--a1); background: var(--a1lt); }
-.scene-item.active.act-2-border { border-color: var(--a2); background: var(--a2lt); }
-.scene-item.active.act-3-border { border-color: var(--a3); background: var(--a3lt); }
+/* Item ativo → azul Word (uniforme, independente do ato) */
+.scene-item.active.act-1-border,
+.scene-item.active.act-2-border,
+.scene-item.active.act-3-border {
+  border-color: var(--word-blue);
+  background: var(--word-blue-soft);
+}
 
 .scene-item-title {
   font-size: 13px;
@@ -291,7 +308,7 @@ html, body {
 }
 
 /* ─────────────────────────────────────────
-   EDITOR AREA
+   EDITOR AREA — canvas cinza + folha branca
 ───────────────────────────────────────── */
 .editor-area {
   flex: 1;
@@ -319,8 +336,9 @@ html, body {
 }
 
 .scene-header {
-  padding: 28px 52px 16px;
+  padding: 20px 52px 12px;
   flex-shrink: 0;
+  background: var(--bg);
 }
 
 .scene-act-label {
@@ -333,9 +351,9 @@ html, body {
 
 .scene-title-h1 {
   font-family: 'Playfair Display', serif;
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--gold);
+  color: var(--word-blue);
   line-height: 1.3;
 }
 
@@ -346,26 +364,39 @@ html, body {
   margin-top: 4px;
 }
 
+/* Área de scroll: mostra o cinza ao redor da "folha" */
 .editor-wrap {
   flex: 1;
   overflow-y: auto;
   display: flex;
   justify-content: center;
+  padding: 12px 24px 24px;
+  background: var(--bg);
 }
 
+/* A textarea VIRA a folha de papel branca */
 #editor-textarea {
   width: 100%;
-  max-width: 680px;
+  max-width: 700px;
   height: 100%;
-  padding: 8px 52px 60px;
-  background: transparent;
-  border: none;
+  min-height: calc(100vh - 240px);
+  padding: 48px 64px 64px;
+  background: var(--surface);
+  border: 1px solid #d9d7d5;
+  border-radius: 2px;
+  box-shadow: 0 2px 8px rgba(0,0,0,.14), 0 0 0 1px rgba(0,0,0,.03);
   outline: none;
   resize: none;
   font-family: Georgia, 'Times New Roman', serif;
   font-size: 16px;
   line-height: 1.9;
   color: var(--text);
+  transition: box-shadow .15s;
+}
+
+#editor-textarea:focus {
+  box-shadow: 0 3px 12px rgba(0,0,0,.18), 0 0 0 1px rgba(24,90,189,.2);
+  border-color: #cfcdcb;
 }
 
 #editor-textarea::placeholder {
@@ -373,8 +404,9 @@ html, body {
   font-style: italic;
 }
 
+/* Rodapé do editor */
 .editor-footer {
-  padding: 8px 52px;
+  padding: 6px 24px;
   border-top: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
@@ -426,16 +458,17 @@ html, body {
   color: var(--text);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 7px 10px;
   outline: none;
-  transition: border-color .15s, background .15s;
+  transition: border-color .15s, box-shadow .15s;
 }
 
 .notes-panel input:focus,
 .notes-panel select:focus,
 .notes-panel textarea:focus {
-  border-color: var(--border2);
+  border-color: var(--word-blue);
+  box-shadow: 0 0 0 2px var(--word-blue-soft);
   background: var(--surface);
 }
 
@@ -451,19 +484,19 @@ html, body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: var(--amber);
+  background: var(--word-blue);
   color: #fff;
   border: none;
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 10px 20px;
   font-size: 14px;
   font-weight: 600;
   font-family: 'Inter', sans-serif;
   cursor: pointer;
-  transition: opacity .15s;
+  transition: background .15s;
   width: 100%;
 }
-.btn-primary:hover { opacity: .88; }
+.btn-primary:hover { background: var(--word-blue-hi); }
 
 .btn-secondary {
   display: inline-flex;
@@ -471,7 +504,7 @@ html, body {
   background: transparent;
   color: var(--sub);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 4px;
   padding: 8px 16px;
   font-size: 13px;
   font-family: 'Inter', sans-serif;
@@ -480,22 +513,26 @@ html, body {
 }
 .btn-secondary:hover { background: var(--bg); }
 
+/* No header: fundo azul → botões com borda e texto brancos */
 .btn-subtle {
   background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,.32);
+  border-radius: 4px;
   padding: 4px 10px;
   font-size: 12px;
-  color: var(--sub);
+  color: #fff;
   font-family: 'Inter', sans-serif;
   cursor: pointer;
-  transition: background .15s;
+  transition: background .15s, border-color .15s;
 }
-.btn-subtle:hover { background: var(--bg); }
+.btn-subtle:hover {
+  background: rgba(255,255,255,.16);
+  border-color: rgba(255,255,255,.55);
+}
 
 .btn-icon {
   width: 24px; height: 24px;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: transparent;
   color: var(--sub);
@@ -507,12 +544,12 @@ html, body {
   justify-content: center;
   transition: background .15s;
 }
-.btn-icon:hover { background: var(--bg); }
+.btn-icon:hover { background: var(--word-blue-soft); color: var(--word-blue); }
 
 .btn-link {
   background: none;
   border: none;
-  color: var(--a1);
+  color: var(--word-blue);
   font-size: 12px;
   font-weight: 500;
   font-family: 'Inter', sans-serif;
@@ -533,7 +570,7 @@ html, body {
   gap: 4px;
   padding: 4px 0;
 }
-.btn-back:hover { color: var(--text); }
+.btn-back:hover { color: var(--word-blue); }
 
 /* ─────────────────────────────────────────
    MODALS
@@ -550,10 +587,10 @@ html, body {
 
 .modal-box {
   background: var(--surface);
-  border-radius: 12px;
+  border-radius: 8px;
   width: 460px;
   max-width: 95vw;
-  box-shadow: 0 20px 60px rgba(0,0,0,.15);
+  box-shadow: 0 20px 60px rgba(0,0,0,.2);
 }
 
 .modal-head {
@@ -599,17 +636,18 @@ html, body {
 .modal-field select {
   padding: 10px 12px;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 4px;
   font-size: 14px;
   font-family: 'Inter', sans-serif;
   color: var(--text);
   background: var(--bg);
   outline: none;
-  transition: border-color .15s;
+  transition: border-color .15s, box-shadow .15s;
 }
 .modal-field input:focus,
 .modal-field select:focus {
-  border-color: var(--amber);
+  border-color: var(--word-blue);
+  box-shadow: 0 0 0 2px var(--word-blue-soft);
   background: var(--surface);
 }
 
@@ -641,15 +679,15 @@ html, body {
   bottom: 24px;
   right: 24px;
   padding: 12px 20px;
-  border-radius: 8px;
+  border-radius: 6px;
   font-size: 13px;
   font-family: 'Inter', sans-serif;
   z-index: 200;
-  box-shadow: 0 4px 16px rgba(0,0,0,.15);
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
   animation: toast-in .2s ease;
 }
 .toast-error { background: var(--a3); color: #fff; }
-.toast-info  { background: var(--a1); color: #fff; }
+.toast-info  { background: var(--word-blue); color: #fff; }
 
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(8px); }
@@ -681,28 +719,28 @@ html, body {
     width: var(--sidebar-w);
     transition: left .25s ease;
     z-index: 50;
-    box-shadow: 4px 0 20px rgba(0,0,0,.1);
+    box-shadow: 4px 0 20px rgba(0,0,0,.15);
   }
   .sidebar.open { left: 0; }
 
-  .scene-header { padding: 20px 24px 12px; }
-  #editor-textarea { padding: 8px 24px 60px; }
-  .editor-footer { padding: 8px 24px; }
-
-  /* Botão hamburguer (gerado via JS) */
-  .sidebar-toggle {
-    display: flex !important;
-  }
+  .scene-header { padding: 16px 20px 10px; }
+  #editor-textarea { padding: 32px 28px 48px; }
+  .editor-wrap { padding: 8px 12px 16px; }
+  .editor-footer { padding: 6px 20px; }
 }
 
 .sidebar-toggle {
   display: none;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.35);
+  border-radius: 4px;
   padding: 4px 8px;
   cursor: pointer;
   font-size: 16px;
-  color: var(--sub);
+  color: #fff;
   align-items: center;
+}
+
+@media (max-width: 680px) {
+  .sidebar-toggle { display: flex !important; }
 }
