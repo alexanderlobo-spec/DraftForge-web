@@ -236,8 +236,16 @@ html, body {
   border-bottom: 1px solid var(--border);
 }
 
+#sidebar-projects, #sidebar-scenes {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 #project-list, #scene-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px 0;
 }
