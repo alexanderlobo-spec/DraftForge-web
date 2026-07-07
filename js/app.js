@@ -1,12 +1,20 @@
 'use strict';
 
+class SaveConflictError extends Error {
+  constructor(msg) {
+    super(msg);
+    this.name = 'SaveConflictError';
+  }
+}
+
 // ── Estado global ──
-let projects       = [];
-let currentProject = null;
-let currentScene   = null;
-let saveTimer      = null;
-let saveStatus     = 'saved';
-let focusMode      = false;
+let projects        = [];
+let currentProject  = null;
+let currentScene    = null;
+let saveTimer       = null;
+let saveStatus      = 'saved';
+let focusMode       = false;
+let conflictAlerted = false;
 
 const $ = id => document.getElementById(id);
 
@@ -812,6 +820,7 @@ const UniverseTree = {
 async function loadAllProjects() {
   $('project-list').innerHTML = '<div class="list-placeholder">Carregando…</div>';
   showSidebarState('projects');
+  conflictAlerted = false;
 
   try {
     const items = await listProjects();
@@ -891,6 +900,7 @@ async function closeCurrentProject() {
   }
   currentProject = null;
   currentScene   = null;
+  conflictAlerted = false;
   $('header-project-name').textContent = '';
   $('header-words').textContent = '';
   setSaveStatus('saved');
@@ -1017,11 +1027,20 @@ async function doSave(silent = false) {
   try {
     await saveProjectJson(currentProject.meta.slug, currentProject);
     if (!silent) setSaveStatus('saved');
+    conflictAlerted = false;
     renderSceneList();
   } catch (e) {
-    if (!silent) setSaveStatus('error');
-    if (e.tokenExpired) showToast('Sessão expirada — clique em Sair e entre novamente', 'error');
-    console.error('Erro ao salvar:', e);
+    if (e.name === 'SaveConflictError') {
+      if (!silent) setSaveStatus('conflict');
+      if (!conflictAlerted) {
+        conflictAlerted = true;
+        showToast('⚠ Conflito: o projeto foi salvo em outro dispositivo. Clique no indicador para recarregar.', 'error');
+      }
+    } else {
+      if (!silent) setSaveStatus('error');
+      if (e.tokenExpired) showToast('Sessão expirada — clique em Sair e entre novamente', 'error');
+      console.error('Erro ao salvar:', e);
+    }
   }
 }
 
@@ -1029,10 +1048,11 @@ function setSaveStatus(status) {
   saveStatus = status;
   const el = $('save-indicator');
   const map = {
-    pending: ['',                   ''],
-    saving:  ['● Salvando…',       'saving'],
-    saved:   ['✓ Salvo',           'saved'],
-    error:   ['⚠ Erro ao salvar',  'error']
+    pending:  ['',                                       ''],
+    saving:   ['● Salvando…',                           'saving'],
+    saved:    ['✓ Salvo',                               'saved'],
+    error:    ['⚠ Erro ao salvar',                      'error'],
+    conflict: ['⚠ Conflito — clique para recarregar',  'conflict']
   };
   const [text, cls] = map[status] || ['', ''];
   el.textContent = text;
@@ -1135,6 +1155,7 @@ document.addEventListener('DOMContentLoaded', () => {
     currentProject = null;
     currentScene   = null;
     projects       = [];
+    conflictAlerted = false;
     $('btn-save-now').classList.add('hidden');
     $('btn-close-project').classList.add('hidden');
     $('btn-focus').classList.add('hidden');
@@ -1206,6 +1227,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // Salvar / Fechar projeto
   $('btn-save-now').addEventListener('click', () => doSave(false));
   $('btn-close-project').addEventListener('click', closeCurrentProject);
+
+  // Indicador de save — clique em conflito para recarregar
+  $('save-indicator').addEventListener('click', async () => {
+    if (saveStatus === 'conflict') {
+      try {
+        const slug = currentProject.meta.slug;
+        const freshData = await loadProjectJson(slug);
+        currentProject = freshData;
+        currentScene = null;
+        renderSceneList();
+        showEditorState('empty');
+        setSaveStatus('saved');
+        conflictAlerted = false;
+        showToast('Projeto recarregado da versão mais recente', 'info');
+      } catch (e) {
+        showToast('Erro ao recarregar: ' + e.message, 'error');
+        console.error(e);
+      }
+    }
+  });
 
   // Modo foco
   $('btn-focus').addEventListener('click', toggleFocusMode);

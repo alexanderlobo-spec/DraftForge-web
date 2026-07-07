@@ -8,6 +8,9 @@ const FOLDER = 'application/vnd.google-apps.folder';
 // Cache de IDs para evitar chamadas repetidas à API
 const _ids = {};
 
+// Rastreia a versão remota esperada de cada projeto (modifiedTime do Drive)
+const _remoteVersions = {};
+
 async function dfetch(url, opts = {}) {
   const token = getAccessToken(); // lança se expirado
   const res   = await fetch(url, {
@@ -91,11 +94,23 @@ async function _projectFileId(slug) {
   return null;
 }
 
+async function _getRemoteModifiedTime(slug) {
+  const fileId = await _projectFileId(slug);
+  if (!fileId) return null;
+  const res = await dfetch(`${DRIVE}/files/${fileId}?fields=modifiedTime`);
+  const d = await res.json();
+  return d.modifiedTime || null;
+}
+
 async function loadProjectJson(slug) {
   const fileId = await _projectFileId(slug);
   if (!fileId) throw new Error('project.json não encontrado: ' + slug);
   const res = await dfetch(`${DRIVE}/files/${fileId}?alt=media`);
-  return await res.json();
+  const data = await res.json();
+  // Cacheia a versão remota esperada
+  const modTime = await _getRemoteModifiedTime(slug);
+  _remoteVersions[slug] = modTime;
+  return data;
 }
 
 async function saveProjectJson(slug, data) {
@@ -104,12 +119,26 @@ async function saveProjectJson(slug, data) {
   const fileId = await _projectFileId(slug);
 
   if (fileId) {
+    // Checa conflito: o arquivo mudou remotamente desde que o carregamos?
+    const currentRemoteTime = await _getRemoteModifiedTime(slug);
+    const expectedRemoteTime = _remoteVersions[slug];
+
+    if (expectedRemoteTime && currentRemoteTime && currentRemoteTime !== expectedRemoteTime) {
+      // Conflito! Salva para arquivo de conflito em vez de sobrescrever
+      await _saveConflictFile(slug, data);
+      const e = new Error('Conflito de escrita: o arquivo foi modificado remotamente');
+      e.name = 'SaveConflictError';
+      throw e;
+    }
+
     // Atualiza arquivo existente
-    await dfetch(`${UPLOAD}/files/${fileId}?uploadType=media`, {
+    const res = await dfetch(`${UPLOAD}/files/${fileId}?uploadType=media&fields=modifiedTime`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body
     });
+    const updated = await res.json();
+    _remoteVersions[slug] = updated.modifiedTime;
   } else {
     // Cria pasta do projeto (se necessário) e o arquivo project.json
     let folderId = await _projectFolderId(slug);
@@ -127,14 +156,38 @@ async function saveProjectJson(slug, data) {
       `--${boundary}--`
     ].join('\r\n');
 
-    const res = await dfetch(`${UPLOAD}/files?uploadType=multipart`, {
+    const res = await dfetch(`${UPLOAD}/files?uploadType=multipart&fields=id,modifiedTime`, {
       method:  'POST',
       headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` },
       body:    multipart
     });
     const newFile = await res.json();
     _ids[`file:${slug}`] = newFile.id;
+    _remoteVersions[slug] = newFile.modifiedTime;
   }
+}
+
+async function _saveConflictFile(slug, data) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const conflictFileName = `conflito_${timestamp}.json`;
+  const folderId = await _projectFolderId(slug);
+  if (!folderId) return;
+
+  const conflictFolder = await _findOrCreateFolder('conflitos', folderId);
+  const body = JSON.stringify(data, null, 2);
+  const boundary = 'df' + Math.random().toString(36).slice(2);
+  const meta = JSON.stringify({ name: conflictFileName, parents: [conflictFolder] });
+  const multipart = [
+    `--${boundary}`, 'Content-Type: application/json', '', meta,
+    `--${boundary}`, 'Content-Type: application/json', '', body,
+    `--${boundary}--`
+  ].join('\r\n');
+
+  await dfetch(`${UPLOAD}/files?uploadType=multipart`, {
+    method: 'POST',
+    headers: { 'Content-Type': `multipart/related; boundary="${boundary}"` },
+    body: multipart
+  });
 }
 
 // ── Utilitários (idênticos à versão OneDrive) ──

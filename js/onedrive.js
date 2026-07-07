@@ -2,6 +2,9 @@
 
 const GRAPH = 'https://graph.microsoft.com/v1.0';
 
+// Rastreia a versão remota esperada de cada projeto (lastModifiedDateTime do OneDrive)
+const _remoteVersions = {};
+
 // Encode cada segmento do caminho separadamente
 function encodePath(p) {
   return p.split('/').map(encodeURIComponent).join('/');
@@ -43,20 +46,68 @@ async function listProjects() {
   }
 }
 
+async function _getRemoteModifiedTime(slug) {
+  try {
+    const path = `${APP_CONFIG.projectsFolder}/${slug}/project.json`;
+    const res = await gFetch(`/me/drive/root:/${encodePath(path)}?$select=lastModifiedDateTime`);
+    const d = await res.json();
+    return d.lastModifiedDateTime || null;
+  } catch {
+    return null;
+  }
+}
+
 async function loadProjectJson(slug) {
   const path = `${APP_CONFIG.projectsFolder}/${slug}/project.json`;
   const res = await gFetch(`/me/drive/root:/${encodePath(path)}:/content`);
-  return await res.json();
+  const data = await res.json();
+  // Cacheia a versão remota esperada
+  const modTime = await _getRemoteModifiedTime(slug);
+  _remoteVersions[slug] = modTime;
+  return data;
 }
 
 async function saveProjectJson(slug, data) {
   data.meta.lastSaved = new Date().toISOString();
   const path = `${APP_CONFIG.projectsFolder}/${slug}/project.json`;
+
+  // Checa conflito: o arquivo mudou remotamente desde que o carregamos?
+  const currentRemoteTime = await _getRemoteModifiedTime(slug);
+  const expectedRemoteTime = _remoteVersions[slug];
+
+  if (expectedRemoteTime && currentRemoteTime && currentRemoteTime !== expectedRemoteTime) {
+    // Conflito! Salva para arquivo de conflito em vez de sobrescrever
+    await _saveConflictFile(slug, data);
+    const e = new Error('Conflito de escrita: o arquivo foi modificado remotamente');
+    e.name = 'SaveConflictError';
+    throw e;
+  }
+
   await gFetch(`/me/drive/root:/${encodePath(path)}:/content`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: JSON.stringify(data, null, 2)
   });
+  // Atualiza a versão remota esperada
+  const modTime = await _getRemoteModifiedTime(slug);
+  _remoteVersions[slug] = modTime;
+}
+
+async function _saveConflictFile(slug, data) {
+  try {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const conflictFileName = `conflito_${timestamp}.json`;
+    const conflictPath = `${APP_CONFIG.projectsFolder}/${slug}/conflitos/${conflictFileName}`;
+    const body = JSON.stringify(data, null, 2);
+
+    await gFetch(`/me/drive/root:/${encodePath(conflictPath)}:/content`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/octet-stream' },
+      body
+    });
+  } catch (e) {
+    console.error('Erro ao salvar arquivo de conflito:', e);
+  }
 }
 
 function slugify(text) {
