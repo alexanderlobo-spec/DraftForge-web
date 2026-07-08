@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content">
   <meta name="description" content="DraftForgeAI — Editor literário no navegador">
   <title>DraftForgeAI</title>
 
@@ -16,6 +16,18 @@
 
   <!-- Restaura tema salvo antes do render para evitar flash -->
   <script>(function(){var t=localStorage.getItem('df_theme');if(t==='dark')document.documentElement.setAttribute('data-theme','dark');}());</script>
+
+  <!-- Corrige 100vh no Safari iOS/iPadOS: sem isso, o teclado virtual empurra
+       o cabeçalho pra fora da tela ao digitar (layout viewport não encolhe). -->
+  <script>(function(){
+    function setVh() {
+      var h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+      document.documentElement.style.setProperty('--vh', h + 'px');
+    }
+    setVh();
+    window.addEventListener('resize', setVh);
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', setVh);
+  }());</script>
 
   <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" onload="gisLoaded()" async defer></script>
