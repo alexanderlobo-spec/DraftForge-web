@@ -202,7 +202,7 @@ function slugify(text) {
 }
 
 function countTextWords(text) {
-  return (text || '').split(/\s+/).filter(Boolean).length;
+  return stripHtml(text || '').split(/\s+/).filter(Boolean).length;
 }
 
 function projectTotalWords(project) {
